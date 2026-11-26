@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AuthBar } from "@/components/AuthBar";
 import { CashSensePanel } from "@/components/CashSensePanel";
 import { PreferencesPanel } from "@/components/PreferencesPanel";
 import { TransactionSensePanel } from "@/components/TransactionSensePanel";
@@ -11,7 +12,9 @@ import {
   createTransactionInApi,
   deleteCashEntryFromApi,
   deleteTransactionFromApi,
+  fetchCurrentUser,
   fetchPreferencesFromApi,
+  getStoredToken,
   listTransactionsFromApi,
   savePreferencesToApi,
 } from "@/lib/api";
@@ -43,6 +46,7 @@ const TAB_ORDER: ActiveTab[] = ["cash", "transactions", "settings"];
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("cash");
+  const [authUsername, setAuthUsername] = useState<string | null>(null);
   const tabRefs = useRef<Record<ActiveTab, HTMLButtonElement | null>>({
     cash: null,
     transactions: null,
@@ -113,6 +117,13 @@ export default function HomePage() {
       setSessionId(storedSessionId);
 
       try {
+        if (!getStoredToken()) {
+          return;
+        }
+        const me = await fetchCurrentUser();
+        if (cancelled) return;
+        setAuthUsername(me.username);
+
         const [remotePrefs, remoteTx] = await Promise.all([
           fetchPreferencesFromApi(),
           listTransactionsFromApi(),
@@ -270,7 +281,26 @@ export default function HomePage() {
           <a className="brand" href="/" aria-label="NairaSense home">
             NairaSense
           </a>
-          <div className="voice-controls" role="region" aria-label="MoneyVoice controls">
+          <div className="voice-controls" role="region" aria-label="MoneyVoice and account controls">
+            <AuthBar
+              username={authUsername}
+              onAuthChange={async (nextUser) => {
+                setAuthUsername(nextUser);
+                if (nextUser) {
+                  try {
+                    const [remotePrefs, remoteTx] = await Promise.all([
+                      fetchPreferencesFromApi(),
+                      listTransactionsFromApi(),
+                    ]);
+                    setPreferences(remotePrefs);
+                    setTransactions(remoteTx);
+                  } catch {
+                    // Keep local state if sync fails
+                  }
+                }
+              }}
+              onAnnounce={announce}
+            />
             <button
               type="button"
               className="secondary small-btn"

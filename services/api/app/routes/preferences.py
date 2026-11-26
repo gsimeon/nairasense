@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.db import DEFAULT_USER_ID, get_conn
+from app.auth import AuthUser, get_current_user
+from app.db import get_conn
 from app.schemas.preferences import UserPreferences, UserPreferencesResponse
 
 router = APIRouter(prefix="/preferences", tags=["preferences"])
@@ -13,11 +15,14 @@ def _now_iso() -> str:
 
 
 @router.get("", response_model=UserPreferencesResponse)
-def get_preferences() -> UserPreferencesResponse:
+def get_preferences(
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
+) -> UserPreferencesResponse:
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT text_size, high_contrast, speech_enabled, speech_rate, updated_at FROM user_preferences WHERE user_id = ?",
-            (DEFAULT_USER_ID,),
+            "SELECT text_size, high_contrast, speech_enabled, speech_rate, updated_at "
+            "FROM user_preferences WHERE user_id = ?",
+            (current_user.user_id,),
         ).fetchone()
         if row is None:
             now = _now_iso()
@@ -26,7 +31,7 @@ def get_preferences() -> UserPreferencesResponse:
                 INSERT INTO user_preferences (user_id, text_size, high_contrast, speech_enabled, speech_rate, updated_at)
                 VALUES (?, 'large', 0, 1, 1.0, ?)
                 """,
-                (DEFAULT_USER_ID, now),
+                (current_user.user_id, now),
             )
             return UserPreferencesResponse(
                 text_size="large",
@@ -45,7 +50,10 @@ def get_preferences() -> UserPreferencesResponse:
 
 
 @router.put("", response_model=UserPreferencesResponse)
-def update_preferences(payload: UserPreferences) -> UserPreferencesResponse:
+def update_preferences(
+    payload: UserPreferences,
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
+) -> UserPreferencesResponse:
     now = _now_iso()
     with get_conn() as conn:
         conn.execute(
@@ -60,7 +68,7 @@ def update_preferences(payload: UserPreferences) -> UserPreferencesResponse:
                 updated_at = excluded.updated_at
             """,
             (
-                DEFAULT_USER_ID,
+                current_user.user_id,
                 payload.text_size,
                 1 if payload.high_contrast else 0,
                 1 if payload.speech_enabled else 0,

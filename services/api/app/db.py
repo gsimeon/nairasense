@@ -6,10 +6,16 @@ from pathlib import Path
 
 from app.settings import settings
 
-DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001"
 VALID_DENOMINATIONS = (5, 10, 20, 50, 100, 200, 500, 1000)
 
 _SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS cash_sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,

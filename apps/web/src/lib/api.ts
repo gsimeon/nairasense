@@ -9,12 +9,29 @@ import {
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
+const TOKEN_KEY = "nairasense_access_token";
+
+export function getStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function setStoredToken(token: string | null): void {
+  if (typeof window === "undefined") return;
+  if (token) {
+    window.localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    window.localStorage.removeItem(TOKEN_KEY);
+  }
+}
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getStoredToken();
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -25,6 +42,30 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+export type AuthSession = {
+  access_token: string;
+  user_id: string;
+  username: string;
+};
+
+export async function registerUser(username: string, password: string): Promise<AuthSession> {
+  return requestJson<AuthSession>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function loginUser(username: string, password: string): Promise<AuthSession> {
+  return requestJson<AuthSession>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function fetchCurrentUser(): Promise<{ user_id: string; username: string }> {
+  return requestJson<{ user_id: string; username: string }>("/auth/me");
 }
 
 export async function inferBanknoteImage(file: File): Promise<InferenceResponse> {

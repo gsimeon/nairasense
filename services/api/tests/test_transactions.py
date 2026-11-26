@@ -28,8 +28,15 @@ def test_extract_transaction_parses_naira_alert() -> None:
 
 
 def test_transaction_crud_lifecycle() -> None:
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"username": "tx_tester", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
     create_res = client.post(
         "/api/v1/transactions",
+        headers=headers,
         json={
             "amount_kobo": 500000,
             "currency": "NGN",
@@ -44,18 +51,19 @@ def test_transaction_crud_lifecycle() -> None:
     assert create_res.status_code == 201
     tx_id = create_res.json()["id"]
 
-    list_res = client.get("/api/v1/transactions")
+    list_res = client.get("/api/v1/transactions", headers=headers)
     assert list_res.status_code == 200
     assert len(list_res.json()) == 1
 
     patch_res = client.patch(
         f"/api/v1/transactions/{tx_id}",
+        headers=headers,
         json={"reported_status": "Verified by user", "amount_kobo": 550000},
     )
     assert patch_res.status_code == 200
     assert patch_res.json()["amount_kobo"] == 550000
     assert patch_res.json()["reported_status"] == "Verified by user"
 
-    del_res = client.delete(f"/api/v1/transactions/{tx_id}")
+    del_res = client.delete(f"/api/v1/transactions/{tx_id}", headers=headers)
     assert del_res.status_code == 204
-    assert client.get("/api/v1/transactions").json() == []
+    assert client.get("/api/v1/transactions", headers=headers).json() == []

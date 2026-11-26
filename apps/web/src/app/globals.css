@@ -58,7 +58,9 @@ button, a, input, select, textarea { outline-offset: 4px; }
 .shell { width: min(100% - 32px, 780px); margin: 0 auto; padding: 20px 0 40px; }
 .topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0 20px; }
 .brand { color: var(--blue); font-size: 1.35rem; font-weight: 800; text-decoration: none; }
-.voice-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.voice-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.auth-inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.auth-form { width: 100%; margin: 8px 0 0; padding: 16px; }
 
 .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid var(--line); padding-bottom: 12px; }
 .tab {

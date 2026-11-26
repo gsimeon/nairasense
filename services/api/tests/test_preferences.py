@@ -6,7 +6,13 @@ client = TestClient(app)
 
 
 def test_preferences_defaults_and_update() -> None:
-    get_res = client.get("/api/v1/preferences")
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"username": "prefs_tester", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    get_res = client.get("/api/v1/preferences", headers=headers)
     assert get_res.status_code == 200
     defaults = get_res.json()
     assert defaults["text_size"] == "large"
@@ -16,6 +22,7 @@ def test_preferences_defaults_and_update() -> None:
 
     put_res = client.put(
         "/api/v1/preferences",
+        headers=headers,
         json={
             "text_size": "extra_large",
             "high_contrast": True,
@@ -29,6 +36,6 @@ def test_preferences_defaults_and_update() -> None:
     assert updated["high_contrast"] is True
     assert updated["speech_rate"] == 1.25
 
-    get_again = client.get("/api/v1/preferences").json()
+    get_again = client.get("/api/v1/preferences", headers=headers).json()
     assert get_again["text_size"] == "extra_large"
     assert get_again["high_contrast"] is True

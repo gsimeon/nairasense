@@ -1,10 +1,12 @@
 import json
 from datetime import UTC, datetime
+from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-from app.db import DEFAULT_USER_ID, get_conn, parse_json_dict
+from app.auth import AuthUser, get_current_user
+from app.db import get_conn, parse_json_dict
 from app.schemas.transactions import (
     TransactionCreate,
     TransactionExtractRequest,
@@ -57,7 +59,10 @@ def extract_transaction(payload: TransactionExtractRequest) -> TransactionExtrac
 
 
 @router.post("", response_model=TransactionResponse, status_code=201)
-def create_transaction(payload: TransactionCreate) -> TransactionResponse:
+def create_transaction(
+    payload: TransactionCreate,
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
+) -> TransactionResponse:
     tx_id = str(uuid4())
     now = _now_iso()
     with get_conn() as conn:
@@ -71,7 +76,7 @@ def create_transaction(payload: TransactionCreate) -> TransactionResponse:
             """,
             (
                 tx_id,
-                DEFAULT_USER_ID,
+                current_user.user_id,
                 payload.amount_kobo,
                 payload.currency,
                 payload.transaction_date,
@@ -88,23 +93,29 @@ def create_transaction(payload: TransactionCreate) -> TransactionResponse:
         )
         row = conn.execute(
             "SELECT * FROM transaction_records WHERE id = ? AND user_id = ?",
-            (tx_id, DEFAULT_USER_ID),
+            (tx_id, current_user.user_id),
         ).fetchone()
     return _row_to_response(row)
 
 
 @router.get("", response_model=list[TransactionResponse])
-def list_transactions() -> list[TransactionResponse]:
+def list_transactions(
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
+) -> list[TransactionResponse]:
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM transaction_records WHERE user_id = ? ORDER BY created_at DESC",
-            (DEFAULT_USER_ID,),
+            (current_user.user_id,),
         ).fetchall()
     return [_row_to_response(row) for row in rows]
 
 
 @router.patch("/{tx_id}", response_model=TransactionResponse)
-def update_transaction(tx_id: str, payload: TransactionUpdate) -> TransactionResponse:
+def update_transaction(
+    tx_id: str,
+    payload: TransactionUpdate,
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
+) -> TransactionResponse:
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields provided for update.")
@@ -112,7 +123,7 @@ def update_transaction(tx_id: str, payload: TransactionUpdate) -> TransactionRes
     with get_conn() as conn:
         existing = conn.execute(
             "SELECT * FROM transaction_records WHERE id = ? AND user_id = ?",
-            (tx_id, DEFAULT_USER_ID),
+            (tx_id, current_user.user_id),
         ).fetchone()
         if existing is None:
             raise HTTPException(status_code=404, detail="Transaction record not found.")
@@ -122,24 +133,27 @@ def update_transaction(tx_id: str, payload: TransactionUpdate) -> TransactionRes
         updates["updated_at"] = _now_iso()
 
         assignments = ", ".join(f"{col} = ?" for col in updates)
-        values = list(updates.values()) + [tx_id, DEFAULT_USER_ID]
+        values = [*list(updates.values()), tx_id, current_user.user_id]
         conn.execute(
             f"UPDATE transaction_records SET {assignments} WHERE id = ? AND user_id = ?",
             values,
         )
         row = conn.execute(
             "SELECT * FROM transaction_records WHERE id = ? AND user_id = ?",
-            (tx_id, DEFAULT_USER_ID),
+            (tx_id, current_user.user_id),
         ).fetchone()
     return _row_to_response(row)
 
 
 @router.delete("/{tx_id}", status_code=204)
-def delete_transaction(tx_id: str) -> None:
+def delete_transaction(
+    tx_id: str,
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
+) -> None:
     with get_conn() as conn:
         cursor = conn.execute(
             "DELETE FROM transaction_records WHERE id = ? AND user_id = ?",
-            (tx_id, DEFAULT_USER_ID),
+            (tx_id, current_user.user_id),
         )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Transaction record not found.")

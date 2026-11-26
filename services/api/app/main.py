@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import check_db_ready
+from app.routes.auth import router as auth_router
 from app.routes.cash import router as cash_router
 from app.routes.preferences import router as preferences_router
 from app.routes.transactions import router as transactions_router
@@ -21,6 +22,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
 )
 
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(cash_router, prefix="/api/v1")
 app.include_router(transactions_router, prefix="/api/v1")
 app.include_router(preferences_router, prefix="/api/v1")
