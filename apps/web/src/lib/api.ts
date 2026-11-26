@@ -104,6 +104,19 @@ export async function createCashSession(): Promise<{ id: string }> {
   });
 }
 
+export type CashSessionSummary = {
+  id: string;
+  currency: string;
+  created_at: string;
+  confirmed_total_ngn: number;
+  confirmed_count: number;
+  entries: CashEntry[];
+};
+
+export async function listCashSessionsFromApi(): Promise<CashSessionSummary[]> {
+  return requestJson<CashSessionSummary[]>("/cash/sessions");
+}
+
 export async function addCashEntryToApi(
   sessionId: string,
   payload: {

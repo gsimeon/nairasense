@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
@@ -19,6 +21,11 @@ from app.services.local_vision import enroll_note_sample, get_enrollment_counts
 from app.settings import settings
 
 router = APIRouter(prefix="/cash", tags=["cash"])
+
+
+def _payload_hash(payload_dict: dict) -> str:
+    canonical = json.dumps(payload_dict, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _now_iso() -> str:
@@ -178,6 +185,18 @@ def create_cash_session(
     return _load_session(session_id, current_user.user_id)
 
 
+@router.get("/sessions", response_model=list[CashSessionResponse])
+def list_cash_sessions(
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
+) -> list[CashSessionResponse]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id FROM cash_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
+            (current_user.user_id,),
+        ).fetchall()
+    return [_load_session(row["id"], current_user.user_id) for row in rows]
+
+
 @router.get("/sessions/{session_id}", response_model=CashSessionResponse)
 def get_cash_session(
     session_id: str,
@@ -194,6 +213,7 @@ def add_cash_entry(
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> CashEntryResponse:
     clean_key = idempotency_key.strip() if idempotency_key else None
+    req_hash = _payload_hash(payload.model_dump()) if clean_key else None
     with get_conn() as conn:
         session_row = conn.execute(
             "SELECT id FROM cash_sessions WHERE id = ? AND user_id = ?",
@@ -206,13 +226,18 @@ def add_cash_entry(
             existing = conn.execute(
                 """
                 SELECT id, session_id, predicted_denomination, confirmed_denomination,
-                       confidence, confirmation_status, created_at
+                       confidence, confirmation_status, idempotency_hash, created_at
                 FROM cash_entries
                 WHERE user_id = ? AND idempotency_key = ?
                 """,
                 (current_user.user_id, clean_key),
             ).fetchone()
             if existing is not None:
+                if existing["idempotency_hash"] != req_hash:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Idempotency-Key reused with a different payload.",
+                    )
                 return CashEntryResponse(
                     id=existing["id"],
                     session_id=existing["session_id"],
@@ -230,8 +255,8 @@ def add_cash_entry(
             INSERT INTO cash_entries (
                 id, session_id, user_id, predicted_denomination,
                 confirmed_denomination, confidence, confirmation_status,
-                idempotency_key, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                idempotency_key, idempotency_hash, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 entry_id,
@@ -242,6 +267,7 @@ def add_cash_entry(
                 payload.confidence,
                 payload.confirmation_status,
                 clean_key,
+                req_hash,
                 now,
             ),
         )

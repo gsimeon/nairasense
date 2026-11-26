@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 _AMOUNT_PATTERN = re.compile(
@@ -40,8 +41,8 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     if amount_match:
         numeric_str = amount_match.group(1).replace(",", "")
         try:
-            amount_kobo = round(float(numeric_str) * 100)
-        except ValueError:
+            amount_kobo = int((Decimal(numeric_str) * 100).to_integral_value())
+        except (InvalidOperation, ValueError):
             amount_kobo = None
 
     ref_match = _REF_PATTERN.search(raw_text)

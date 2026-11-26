@@ -167,6 +167,14 @@ def test_idempotency_prevents_duplicate_cash_and_transactions() -> None:
     assert session["confirmed_total_ngn"] == 1000
     assert session["confirmed_count"] == 1
 
+    # Reusing same Idempotency-Key with a DIFFERENT payload must return 409 Conflict
+    mismatch_cash = client.post(
+        f"/api/v1/cash/sessions/{session_id}/entries",
+        headers=headers,
+        json={"confirmed_denomination": 500, "confirmation_status": "confirmed"},
+    )
+    assert mismatch_cash.status_code == 409
+
     tx_headers = {**headers, "Idempotency-Key": "op-tx-1"}
     t1 = client.post(
         "/api/v1/transactions",
@@ -180,3 +188,15 @@ def test_idempotency_prevents_duplicate_cash_and_transactions() -> None:
     )
     assert t1.json()["id"] == t2.json()["id"]
     assert len(client.get("/api/v1/transactions", headers=tx_headers).json()) == 1
+
+    mismatch_tx = client.post(
+        "/api/v1/transactions",
+        headers=tx_headers,
+        json={"amount_kobo": 999900, "currency": "NGN", "source_type": "pasted_text"},
+    )
+    assert mismatch_tx.status_code == 409
+
+    # Session listing returns user's cash history
+    sessions = client.get("/api/v1/cash/sessions", headers=headers).json()
+    assert len(sessions) == 1
+    assert sessions[0]["confirmed_total_ngn"] == 1000

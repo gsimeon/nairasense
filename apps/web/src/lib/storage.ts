@@ -225,3 +225,18 @@ export async function markSyncItemRetry(item: PendingSyncItem): Promise<void> {
     nextRetryAt: Date.now() + backoffMs,
   });
 }
+
+export async function resetFailedSyncItems(namespace: string): Promise<void> {
+  const queue = await loadSyncQueue(namespace);
+  const failed = queue.filter((i) => i.status === "failed");
+  await Promise.all(
+    failed.map((item) =>
+      putInStore(STORE_SYNC, {
+        ...item,
+        attempts: 0,
+        status: "pending",
+        nextRetryAt: 0,
+      }),
+    ),
+  );
+}

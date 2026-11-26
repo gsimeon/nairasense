@@ -1,4 +1,4 @@
-const CACHE_NAME = "nairasense-v1";
+const CACHE_NAME = "nairasense-v2";
 const STATIC_ASSETS = ["/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -19,7 +19,18 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET" || request.url.includes("/api/v1/")) {
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) {
+    return;
+  }
+
+  const isStaticAsset =
+    url.pathname === "/" ||
+    url.pathname === "/manifest.webmanifest" ||
+    url.pathname.startsWith("/_next/static/");
+  if (!isStaticAsset) {
     return;
   }
 

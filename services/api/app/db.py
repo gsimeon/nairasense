@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS cash_entries (
         confirmation_status IN ('pending', 'confirmed', 'corrected', 'rejected')
     ),
     idempotency_key TEXT,
+    idempotency_hash TEXT,
     created_at TEXT NOT NULL
 );
 
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS transaction_records (
     extracted_fields TEXT NOT NULL DEFAULT '{}',
     user_confirmed INTEGER NOT NULL DEFAULT 0,
     idempotency_key TEXT,
+    idempotency_hash TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

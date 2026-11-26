@@ -15,6 +15,7 @@ import {
   fetchCurrentUser,
   fetchPreferencesFromApi,
   getStoredToken,
+  listCashSessionsFromApi,
   listTransactionsFromApi,
   savePreferencesToApi,
 } from "@/lib/api";
@@ -31,6 +32,7 @@ import {
   loadSyncQueue,
   markSyncItemRetry,
   removeSyncItem,
+  resetFailedSyncItems,
   saveOfflineCashEntry,
   saveOfflinePreferences,
   saveOfflineTransaction,
@@ -55,6 +57,9 @@ export default function HomePage() {
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [failedSyncCount, setFailedSyncCount] = useState(0);
   const syncInFlightRef = useRef(false);
+  const pendingResyncRef = useRef<{ userId: string; sessionId: string | null; epoch: number } | null>(
+    null,
+  );
   const accountEpochRef = useRef(0);
   const tabRefs = useRef<Record<ActiveTab, HTMLButtonElement | null>>({
     cash: null,
@@ -118,7 +123,11 @@ export default function HomePage() {
 
   const flushSyncQueue = useCallback(
     async (userId: string, existingSessionId: string | null, epoch: number) => {
-      if (syncInFlightRef.current) return;
+      if (syncInFlightRef.current) {
+        // Queue a follow-up flush for the requesting account so it is never dropped
+        pendingResyncRef.current = { userId, sessionId: existingSessionId, epoch };
+        return;
+      }
       syncInFlightRef.current = true;
       try {
         const queue = await loadSyncQueue(userId);
@@ -191,6 +200,11 @@ export default function HomePage() {
         setTransactions(freshTx);
       } finally {
         syncInFlightRef.current = false;
+        const queued = pendingResyncRef.current;
+        if (queued && queued.epoch === accountEpochRef.current) {
+          pendingResyncRef.current = null;
+          void flushSyncQueue(queued.userId, queued.sessionId, queued.epoch);
+        }
       }
     },
     [updateSyncCounters],
@@ -219,15 +233,39 @@ export default function HomePage() {
       try {
         await flushSyncQueue(userId, storedSessionId, epoch);
         if (accountEpochRef.current !== epoch) return;
-        const [remotePrefs, remoteTx] = await Promise.all([
+        const [remotePrefs, remoteTx, remoteSessions] = await Promise.all([
           fetchPreferencesFromApi(),
           listTransactionsFromApi(),
+          listCashSessionsFromApi(),
         ]);
         if (accountEpochRef.current !== epoch) return;
         setPreferences(remotePrefs);
         await saveOfflinePreferences(ns, remotePrefs);
 
-        // Reconcile remote list cleanly (including empty remote lists) while keeping unsynced local items
+        // Restore latest remote cash session and reconcile with unsynced local entries
+        if (remoteSessions.length > 0) {
+          const latest = remoteSessions[0];
+          setSessionId(latest.id);
+          await setOfflineSessionId(ns, latest.id);
+          const currentLocalCash = await loadOfflineCashEntries(ns);
+          const unsyncedCash = currentLocalCash.filter((e) => !e.synced);
+          const remoteEntries = latest.entries.map((e) => ({ ...e, synced: true }));
+          const mergedCash = [
+            ...remoteEntries,
+            ...unsyncedCash.filter((u) => !remoteEntries.some((r) => r.id === u.id)),
+          ];
+          setCashEntries(mergedCash);
+          await Promise.all(
+            latest.entries.map((e) => saveOfflineCashEntry(ns, { ...e, synced: true })),
+          );
+        } else if (!storedSessionId) {
+          const session = await createCashSession();
+          if (accountEpochRef.current !== epoch) return;
+          setSessionId(session.id);
+          await setOfflineSessionId(ns, session.id);
+        }
+
+        // Reconcile remote transaction list cleanly (including empty remote lists)
         const currentLocalTx = await loadOfflineTransactions(ns);
         const unsyncedLocal = currentLocalTx.filter((t) => !t.synced);
         const merged = [
@@ -243,13 +281,6 @@ export default function HomePage() {
             .map((stale) => deleteOfflineTransaction(stale.id)),
         );
         await Promise.all(remoteTx.map((tx) => saveOfflineTransaction(ns, { ...tx, synced: true })));
-
-        if (!storedSessionId) {
-          const session = await createCashSession();
-          if (accountEpochRef.current !== epoch) return;
-          setSessionId(session.id);
-          await setOfflineSessionId(ns, session.id);
-        }
       } catch {
         // Offline or API unavailable; partitioned IndexedDB remains active.
       }
@@ -478,6 +509,19 @@ export default function HomePage() {
             <span className="tag" aria-live="polite">
               {syncLabel}
             </span>
+            {authUserId && failedSyncCount > 0 && (
+              <button
+                type="button"
+                className="secondary small-btn"
+                onClick={async () => {
+                  await resetFailedSyncItems(authUserId);
+                  await flushSyncQueue(authUserId, sessionId, accountEpochRef.current);
+                  announce("Retrying failed sync items.", true);
+                }}
+              >
+                Retry failed syncs
+              </button>
+            )}
             <AuthBar
               username={authUsername}
               onAuthChange={async (user) => {

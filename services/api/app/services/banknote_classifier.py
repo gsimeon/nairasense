@@ -123,7 +123,10 @@ def classify_banknote(
             raw = _call_gemini_vision(image_bytes, content_type)
             return parse_vision_payload(raw, model_name=settings.gemini_model, model_version="gemini-vision-v1")
         except (urllib.error.URLError, KeyError, IndexError, ValueError, json.JSONDecodeError, RuntimeError):
-            pass
+            fallback = classify_banknote_offline(image_bytes, user_id=user_id)
+            fallback.model.name = "local-naira-cv-fallback"
+            fallback.image_quality.warnings.append("EXTERNAL_VISION_FALLBACK_TO_LOCAL")
+            return fallback
 
     # Default: 100% offline local pixel-based classifier (scoped to user_id if authenticated)
     return classify_banknote_offline(image_bytes, user_id=user_id)
