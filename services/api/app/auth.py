@@ -81,3 +81,11 @@ def get_current_user(
             detail="User account not found.",
         )
     return AuthUser(user_id=row["id"], username=row["username"])
+
+
+def get_optional_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> AuthUser | None:
+    if credentials is None:
+        return None
+    return get_current_user(credentials)

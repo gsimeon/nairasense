@@ -23,10 +23,14 @@ import {
   clearOfflineCashEntries,
   deleteOfflineCashEntry,
   deleteOfflineTransaction,
+  enqueueSyncItem,
   getOfflineSessionId,
+  incrementSyncAttempt,
   loadOfflineCashEntries,
   loadOfflinePreferences,
   loadOfflineTransactions,
+  loadSyncQueue,
+  removeSyncItem,
   saveOfflineCashEntry,
   saveOfflinePreferences,
   saveOfflineTransaction,
@@ -46,12 +50,22 @@ const TAB_ORDER: ActiveTab[] = ["cash", "transactions", "settings"];
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("cash");
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [authUsername, setAuthUsername] = useState<string | null>(null);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const tabRefs = useRef<Record<ActiveTab, HTMLButtonElement | null>>({
     cash: null,
     transactions: null,
     settings: null,
   });
+
+  const [preferences, setPreferences] = useState<AccessibilityPreferences>(DEFAULT_PREFERENCES);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [cashEntries, setCashEntries] = useState<CashEntry[]>([]);
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [status, setStatus] = useState("");
+
+  const activeNamespace = authUserId ?? "guest";
 
   function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, current: ActiveTab) {
     const idx = TAB_ORDER.indexOf(current);
@@ -68,11 +82,6 @@ export default function HomePage() {
       tabRefs.current[nextTab]?.focus();
     }
   }
-  const [preferences, setPreferences] = useState<AccessibilityPreferences>(DEFAULT_PREFERENCES);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [cashEntries, setCashEntries] = useState<CashEntry[]>([]);
-  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
-  const [status, setStatus] = useState("");
 
   const announce = useCallback(
     (message: string, shouldSpeak = false) => {
@@ -87,7 +96,6 @@ export default function HomePage() {
     [preferences.speech_enabled, preferences.speech_rate],
   );
 
-  // Apply text size and high contrast attributes to <html>, and register PWA service worker
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.textSize = preferences.text_size;
@@ -100,59 +108,146 @@ export default function HomePage() {
     }
   }, []);
 
-  // Initial hydration from IndexedDB, then sync with backend API if available
-  useEffect(() => {
-    let cancelled = false;
-    async function hydrate() {
-      const [localPrefs, localEntries, localTx, storedSessionId] = await Promise.all([
-        loadOfflinePreferences(),
-        loadOfflineCashEntries(),
-        loadOfflineTransactions(),
-        getOfflineSessionId(),
+  const flushSyncQueue = useCallback(async (userId: string, existingSessionId: string | null) => {
+    const queue = await loadSyncQueue(userId);
+    setPendingSyncCount(queue.length);
+    if (queue.length === 0) return;
+
+    let activeSession = existingSessionId;
+    for (const item of queue) {
+      try {
+        if (item.kind === "cash_entry") {
+          if (!activeSession) {
+            const session = await createCashSession();
+            activeSession = session.id;
+            setSessionId(activeSession);
+            await setOfflineSessionId(userId, activeSession);
+          }
+          const created = await addCashEntryToApi(
+            activeSession,
+            item.payload as {
+              predicted_denomination: number | null;
+              confirmed_denomination: number | null;
+              confidence: number | null;
+              confirmation_status: ConfirmationStatus;
+            },
+          );
+          await deleteOfflineCashEntry(item.id);
+          await saveOfflineCashEntry(userId, { ...created, synced: true });
+          await removeSyncItem(item.id);
+        } else if (item.kind === "transaction") {
+          const saved = await createTransactionInApi(
+            item.payload as {
+              amount_kobo: number | null;
+              currency: "NGN";
+              transaction_date: string | null;
+              reference: string | null;
+              sender_label: string | null;
+              recipient_label: string | null;
+              reported_status: string | null;
+              source_type: SourceType;
+              extracted_fields: Record<string, unknown>;
+              user_confirmed: boolean;
+            },
+          );
+          await deleteOfflineTransaction(item.id);
+          await saveOfflineTransaction(userId, { ...saved, synced: true });
+          await removeSyncItem(item.id);
+        }
+      } catch {
+        await incrementSyncAttempt(item);
+      }
+    }
+
+    const remaining = await loadSyncQueue(userId);
+    setPendingSyncCount(remaining.length);
+    const [freshCash, freshTx] = await Promise.all([
+      loadOfflineCashEntries(userId),
+      loadOfflineTransactions(userId),
+    ]);
+    setCashEntries(freshCash);
+    setTransactions(freshTx);
+  }, []);
+
+  const loadAccountState = useCallback(
+    async (userId: string | null) => {
+      const ns = userId ?? "guest";
+      const [localPrefs, localEntries, localTx, storedSessionId, queue] = await Promise.all([
+        loadOfflinePreferences(ns),
+        loadOfflineCashEntries(ns),
+        loadOfflineTransactions(ns),
+        getOfflineSessionId(ns),
+        loadSyncQueue(ns),
       ]);
-      if (cancelled) return;
       setPreferences(localPrefs);
       setCashEntries(localEntries);
       setTransactions(localTx);
       setSessionId(storedSessionId);
+      setPendingSyncCount(queue.length);
+
+      if (!userId) return;
 
       try {
-        if (!getStoredToken()) {
-          return;
-        }
-        const me = await fetchCurrentUser();
-        if (cancelled) return;
-        setAuthUsername(me.username);
-
+        await flushSyncQueue(userId, storedSessionId);
         const [remotePrefs, remoteTx] = await Promise.all([
           fetchPreferencesFromApi(),
           listTransactionsFromApi(),
         ]);
-        if (cancelled) return;
         setPreferences(remotePrefs);
-        await saveOfflinePreferences(remotePrefs);
+        await saveOfflinePreferences(ns, remotePrefs);
 
         if (remoteTx.length > 0) {
           setTransactions(remoteTx);
-          await Promise.all(remoteTx.map((tx) => saveOfflineTransaction(tx)));
+          await Promise.all(remoteTx.map((tx) => saveOfflineTransaction(ns, { ...tx, synced: true })));
         }
 
         if (!storedSessionId) {
           const session = await createCashSession();
-          if (!cancelled) {
-            setSessionId(session.id);
-            await setOfflineSessionId(session.id);
-          }
+          setSessionId(session.id);
+          await setOfflineSessionId(ns, session.id);
         }
       } catch {
-        // Offline or API not running; IndexedDB state remains active.
+        // Offline or API unavailable; partitioned IndexedDB remains active.
+      }
+    },
+    [flushSyncQueue],
+  );
+
+  // Initial hydration: verify token if present, then load partitioned IndexedDB state
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrate() {
+      if (getStoredToken()) {
+        try {
+          const me = await fetchCurrentUser();
+          if (cancelled) return;
+          setAuthUserId(me.user_id);
+          setAuthUsername(me.username);
+          await loadAccountState(me.user_id);
+          return;
+        } catch {
+          // Token expired or API offline; fall back to guest namespace
+        }
+      }
+      if (!cancelled) {
+        await loadAccountState(null);
       }
     }
-    hydrate();
+    void hydrate();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAccountState]);
+
+  // Flush sync queue automatically when browser regains connectivity
+  useEffect(() => {
+    if (!authUserId) return;
+    const handleOnline = () => {
+      void flushSyncQueue(authUserId, sessionId);
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [authUserId, flushSyncQueue, sessionId]);
 
   async function handleAddCashEntry(input: {
     predicted_denomination: number | null;
@@ -166,53 +261,74 @@ export default function HomePage() {
         : `local-${Date.now()}`;
     let activeSession = sessionId;
 
-    try {
-      if (!activeSession) {
-        const session = await createCashSession();
-        activeSession = session.id;
-        setSessionId(activeSession);
-        await setOfflineSessionId(activeSession);
+    if (authUserId) {
+      try {
+        if (!activeSession) {
+          const session = await createCashSession();
+          activeSession = session.id;
+          setSessionId(activeSession);
+          await setOfflineSessionId(activeNamespace, activeSession);
+        }
+        const created = await addCashEntryToApi(activeSession, input);
+        const syncedEntry: CashEntry = { ...created, synced: true };
+        setCashEntries((prev) => [...prev, syncedEntry]);
+        await saveOfflineCashEntry(activeNamespace, syncedEntry);
+        return;
+      } catch {
+        // Queue for durable retry when back online
+        await enqueueSyncItem({
+          id: localId,
+          namespace: activeNamespace,
+          kind: "cash_entry",
+          payload: input,
+          attempts: 0,
+          created_at: new Date().toISOString(),
+        });
+        setPendingSyncCount((c) => c + 1);
       }
-      const created = await addCashEntryToApi(activeSession, input);
-      const syncedEntry: CashEntry = { ...created, synced: true };
-      setCashEntries((prev) => [...prev, syncedEntry]);
-      await saveOfflineCashEntry(syncedEntry);
-    } catch {
-      const offlineEntry: CashEntry = {
-        id: localId,
-        session_id: activeSession ?? "offline-session",
-        predicted_denomination: input.predicted_denomination,
-        confirmed_denomination: input.confirmed_denomination,
-        confidence: input.confidence,
-        confirmation_status: input.confirmation_status,
-        created_at: new Date().toISOString(),
-        synced: false,
-      };
-      setCashEntries((prev) => [...prev, offlineEntry]);
-      await saveOfflineCashEntry(offlineEntry);
     }
+
+    const offlineEntry: CashEntry = {
+      id: localId,
+      session_id: activeSession ?? "offline-session",
+      predicted_denomination: input.predicted_denomination,
+      confirmed_denomination: input.confirmed_denomination,
+      confidence: input.confidence,
+      confirmation_status: input.confirmation_status,
+      created_at: new Date().toISOString(),
+      synced: false,
+    };
+    setCashEntries((prev) => [...prev, offlineEntry]);
+    await saveOfflineCashEntry(activeNamespace, offlineEntry);
   }
 
   async function handleDeleteCashEntry(entryId: string) {
     setCashEntries((prev) => prev.filter((item) => item.id !== entryId));
     await deleteOfflineCashEntry(entryId);
-    try {
-      await deleteCashEntryFromApi(entryId);
-    } catch {
-      // Already removed locally
+    await removeSyncItem(entryId);
+    if (authUserId) {
+      try {
+        await deleteCashEntryFromApi(entryId);
+      } catch {
+        // Already removed locally
+      }
     }
   }
 
   async function handleClearCashSession() {
     setCashEntries([]);
-    await clearOfflineCashEntries();
-    try {
-      const session = await createCashSession();
-      setSessionId(session.id);
-      await setOfflineSessionId(session.id);
-    } catch {
-      setSessionId(null);
+    await clearOfflineCashEntries(activeNamespace);
+    if (authUserId) {
+      try {
+        const session = await createCashSession();
+        setSessionId(session.id);
+        await setOfflineSessionId(activeNamespace, session.id);
+        return;
+      } catch {
+        // Offline
+      }
     }
+    setSessionId(null);
   }
 
   async function handleSaveTransaction(payload: {
@@ -227,48 +343,74 @@ export default function HomePage() {
     extracted_fields: Record<string, unknown>;
     user_confirmed: boolean;
   }) {
-    try {
-      const saved = await createTransactionInApi(payload);
-      const synced: TransactionRecord = { ...saved, synced: true };
-      setTransactions((prev) => [synced, ...prev]);
-      await saveOfflineTransaction(synced);
-    } catch {
-      const now = new Date().toISOString();
-      const offlineRecord: TransactionRecord = {
-        id:
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `tx-${Date.now()}`,
-        ...payload,
-        created_at: now,
-        updated_at: now,
-        synced: false,
-      };
-      setTransactions((prev) => [offlineRecord, ...prev]);
-      await saveOfflineTransaction(offlineRecord);
+    const localId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `tx-${Date.now()}`;
+
+    if (authUserId) {
+      try {
+        const saved = await createTransactionInApi(payload);
+        const synced: TransactionRecord = { ...saved, synced: true };
+        setTransactions((prev) => [synced, ...prev]);
+        await saveOfflineTransaction(activeNamespace, synced);
+        return;
+      } catch {
+        await enqueueSyncItem({
+          id: localId,
+          namespace: activeNamespace,
+          kind: "transaction",
+          payload,
+          attempts: 0,
+          created_at: new Date().toISOString(),
+        });
+        setPendingSyncCount((c) => c + 1);
+      }
     }
+
+    const now = new Date().toISOString();
+    const offlineRecord: TransactionRecord = {
+      id: localId,
+      ...payload,
+      created_at: now,
+      updated_at: now,
+      synced: false,
+    };
+    setTransactions((prev) => [offlineRecord, ...prev]);
+    await saveOfflineTransaction(activeNamespace, offlineRecord);
   }
 
   async function handleDeleteTransaction(id: string) {
     setTransactions((prev) => prev.filter((item) => item.id !== id));
     await deleteOfflineTransaction(id);
-    try {
-      await deleteTransactionFromApi(id);
-    } catch {
-      // Already removed locally
+    await removeSyncItem(id);
+    if (authUserId) {
+      try {
+        await deleteTransactionFromApi(id);
+      } catch {
+        // Already removed locally
+      }
     }
   }
 
   async function handleUpdatePreferences(next: AccessibilityPreferences) {
     setPreferences(next);
-    await saveOfflinePreferences(next);
-    try {
-      await savePreferencesToApi(next);
-    } catch {
-      // Saved locally
+    await saveOfflinePreferences(activeNamespace, next);
+    if (authUserId) {
+      try {
+        await savePreferencesToApi(next);
+      } catch {
+        // Saved locally
+      }
     }
     announce("Accessibility and voice preferences updated.", false);
   }
+
+  const syncLabel = !authUserId
+    ? "Local-only mode"
+    : pendingSyncCount > 0
+      ? `${pendingSyncCount} pending sync`
+      : "Synced";
 
   return (
     <>
@@ -282,22 +424,19 @@ export default function HomePage() {
             NairaSense
           </a>
           <div className="voice-controls" role="region" aria-label="MoneyVoice and account controls">
+            <span className="tag" aria-live="polite">
+              {syncLabel}
+            </span>
             <AuthBar
               username={authUsername}
-              onAuthChange={async (nextUser) => {
-                setAuthUsername(nextUser);
-                if (nextUser) {
-                  try {
-                    const [remotePrefs, remoteTx] = await Promise.all([
-                      fetchPreferencesFromApi(),
-                      listTransactionsFromApi(),
-                    ]);
-                    setPreferences(remotePrefs);
-                    setTransactions(remoteTx);
-                  } catch {
-                    // Keep local state if sync fails
-                  }
-                }
+              onAuthChange={async (user) => {
+                setAuthUserId(user?.userId ?? null);
+                setAuthUsername(user?.username ?? null);
+                // Clear in-memory state immediately before loading the target namespace
+                setCashEntries([]);
+                setTransactions([]);
+                setSessionId(null);
+                await loadAccountState(user?.userId ?? null);
               }}
               onAnnounce={announce}
             />
@@ -328,7 +467,9 @@ export default function HomePage() {
         <nav className="tabs" role="tablist" aria-label="NairaSense sections">
           <button
             id="tab-cash"
-            ref={(el) => { tabRefs.current.cash = el; }}
+            ref={(el) => {
+              tabRefs.current.cash = el;
+            }}
             type="button"
             role="tab"
             tabIndex={activeTab === "cash" ? 0 : -1}
@@ -342,7 +483,9 @@ export default function HomePage() {
           </button>
           <button
             id="tab-transactions"
-            ref={(el) => { tabRefs.current.transactions = el; }}
+            ref={(el) => {
+              tabRefs.current.transactions = el;
+            }}
             type="button"
             role="tab"
             tabIndex={activeTab === "transactions" ? 0 : -1}
@@ -356,7 +499,9 @@ export default function HomePage() {
           </button>
           <button
             id="tab-settings"
-            ref={(el) => { tabRefs.current.settings = el; }}
+            ref={(el) => {
+              tabRefs.current.settings = el;
+            }}
             type="button"
             role="tab"
             tabIndex={activeTab === "settings" ? 0 : -1}

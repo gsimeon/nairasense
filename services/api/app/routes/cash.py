@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from app.auth import AuthUser, get_current_user
+from app.auth import AuthUser, get_current_user, get_optional_current_user
 from app.db import VALID_DENOMINATIONS, get_conn
 from app.rate_limit import rate_limit_infer
 from app.schemas.cash import (
@@ -111,11 +111,12 @@ def _load_session(session_id: str, user_id: str) -> CashSessionResponse:
 )
 async def infer_banknote(
     image: Annotated[UploadFile, File(...)],
+    current_user: Annotated[AuthUser | None, Depends(get_optional_current_user)] = None,
 ) -> CashInferenceResponse:
     """Stateless banknote denomination suggestion endpoint.
 
-    Intentionally accessible without login for single-device demo/triage, protected by
-    IP rate limiting, bounded 8 MB streaming reads, and MIME/magic-byte validation.
+    Supports both anonymous demo triage and authenticated user-scoped reference matching,
+    protected by IP rate limiting, bounded 8 MB streaming reads, and magic-byte validation.
     """
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
     if image.content_type not in allowed_types:
@@ -125,7 +126,8 @@ async def infer_banknote(
     if not _has_valid_image_magic(content, image.content_type):
         raise HTTPException(status_code=415, detail="Uploaded file bytes do not match image type.")
 
-    return classify_banknote(content, image.content_type)
+    user_id = current_user.user_id if current_user else None
+    return classify_banknote(content, image.content_type, user_id=user_id)
 
 
 @router.get("/enrollments")

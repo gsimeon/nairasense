@@ -6,7 +6,7 @@ import { loginUser, registerUser, setStoredToken } from "@/lib/api";
 
 type AuthBarProps = {
   username: string | null;
-  onAuthChange: (username: string | null) => Promise<void>;
+  onAuthChange: (user: { userId: string; username: string } | null) => Promise<void>;
   onAnnounce: (message: string, speak?: boolean) => void;
 };
 
@@ -28,7 +28,7 @@ export function AuthBar({ username, onAuthChange, onAnnounce }: AuthBarProps) {
       setStoredToken(res.access_token);
       setOpen(false);
       setPassInput("");
-      await onAuthChange(res.username);
+      await onAuthChange({ userId: res.user_id, username: res.username });
       onAnnounce(`Signed in as ${res.username}. Cloud sync is active.`, true);
     } catch (err) {
       onAnnounce(err instanceof Error ? err.message : "Authentication failed.", true);

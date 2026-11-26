@@ -129,3 +129,18 @@ def test_enrollment_is_user_isolated(monkeypatch) -> None:
     counts_b = client.get("/api/v1/cash/enrollments", headers=headers_b).json()["counts"]
     assert counts_a["1000"] == 1
     assert counts_b["1000"] == 0
+
+    # Alice's enrolled reference removes the prior-only warning for Alice,
+    # while Bob and anonymous callers still do not use Alice's enrolled samples.
+    alice_infer = client.post(
+        "/api/v1/cash/infer",
+        headers=headers_a,
+        files={"image": ("q.png", png, "image/png")},
+    ).json()
+    bob_infer = client.post(
+        "/api/v1/cash/infer",
+        headers=headers_b,
+        files={"image": ("q.png", png, "image/png")},
+    ).json()
+    assert "COLOR_PRIOR_ONLY_ENROLL_SAMPLES_FOR_HIGHER_ACCURACY" not in alice_infer["image_quality"]["warnings"]
+    assert "COLOR_PRIOR_ONLY_ENROLL_SAMPLES_FOR_HIGHER_ACCURACY" in bob_infer["image_quality"]["warnings"]

@@ -69,9 +69,14 @@ export async function fetchCurrentUser(): Promise<{ user_id: string; username: s
 }
 
 export async function inferBanknoteImage(file: File): Promise<InferenceResponse> {
+  const token = getStoredToken();
   const body = new FormData();
   body.append("image", file);
-  const response = await fetch(`${API_BASE}/cash/infer`, { method: "POST", body });
+  const response = await fetch(`${API_BASE}/cash/infer`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body,
+  });
   if (!response.ok) {
     throw new Error(`Request failed (${response.status})`);
   }

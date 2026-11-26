@@ -90,6 +90,7 @@ def test_enroll_disabled_by_default_and_works_when_enabled(monkeypatch) -> None:
 
     infer_res = client.post(
         "/api/v1/cash/infer",
+        headers=headers,
         files={"image": ("query_1000.png", naira_1000, "image/png")},
     )
     assert infer_res.status_code == 200

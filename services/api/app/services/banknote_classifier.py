@@ -109,7 +109,11 @@ def parse_vision_payload(raw: dict[str, Any], model_name: str, model_version: st
     )
 
 
-def classify_banknote(image_bytes: bytes, content_type: str) -> CashInferenceResponse:
+def classify_banknote(
+    image_bytes: bytes,
+    content_type: str,
+    user_id: str | None = None,
+) -> CashInferenceResponse:
     provider = settings.vision_provider.lower()
     if provider == "mock":
         return _mock_response()
@@ -121,5 +125,5 @@ def classify_banknote(image_bytes: bytes, content_type: str) -> CashInferenceRes
         except (urllib.error.URLError, KeyError, IndexError, ValueError, json.JSONDecodeError, RuntimeError):
             pass
 
-    # Default: 100% offline local pixel-based classifier (no API key required)
-    return classify_banknote_offline(image_bytes)
+    # Default: 100% offline local pixel-based classifier (scoped to user_id if authenticated)
+    return classify_banknote_offline(image_bytes, user_id=user_id)

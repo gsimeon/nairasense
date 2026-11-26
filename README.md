@@ -55,7 +55,7 @@ uvicorn app.main:app --reload --port 8000
 
 API docs: http://localhost:8000/docs
 
-The `/api/v1/cash/infer` endpoint currently returns a **mock** prediction. It must not be used to make real cash decisions.
+The `/api/v1/cash/infer` endpoint defaults to the experimental `local-naira-cv` pixel/color baseline (no API key required). It is not a trained Naira banknote model and must not be relied upon without user confirmation.
 
 ## Run the web app
 
@@ -94,7 +94,7 @@ npm run build
 
 ## Validation & important limitations
 
-- **Backend:** `ruff check app tests` and `pytest` (11 tests covering health, cash sessions, local baseline classifier, opt-in enrollment guard, transaction extraction/CRUD, and preferences).
+- **Backend:** `ruff check app tests` and `pytest` (18 tests covering health, auth/JWT/Argon2id, cross-user isolation, bounded upload/pixel checks, cash sessions, local baseline classifier, user-isolated opt-in enrollment, transaction extraction/CRUD, and preferences).
 - **Frontend:** `npm run typecheck`, `npm run lint`, and `npm run build`.
 - **Important:** API tests use synthetic textured PNGs, not genuine Naira banknote photographs. Do not treat baseline match scores as calibrated accuracy.
 
