@@ -25,11 +25,11 @@ import {
   deleteOfflineTransaction,
   enqueueSyncItem,
   getOfflineSessionId,
-  incrementSyncAttempt,
   loadOfflineCashEntries,
   loadOfflinePreferences,
   loadOfflineTransactions,
   loadSyncQueue,
+  markSyncItemRetry,
   removeSyncItem,
   saveOfflineCashEntry,
   saveOfflinePreferences,
@@ -53,6 +53,9 @@ export default function HomePage() {
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [authUsername, setAuthUsername] = useState<string | null>(null);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [failedSyncCount, setFailedSyncCount] = useState(0);
+  const syncInFlightRef = useRef(false);
+  const accountEpochRef = useRef(0);
   const tabRefs = useRef<Record<ActiveTab, HTMLButtonElement | null>>({
     cash: null,
     transactions: null,
@@ -108,69 +111,94 @@ export default function HomePage() {
     }
   }, []);
 
-  const flushSyncQueue = useCallback(async (userId: string, existingSessionId: string | null) => {
-    const queue = await loadSyncQueue(userId);
-    setPendingSyncCount(queue.length);
-    if (queue.length === 0) return;
-
-    let activeSession = existingSessionId;
-    for (const item of queue) {
-      try {
-        if (item.kind === "cash_entry") {
-          if (!activeSession) {
-            const session = await createCashSession();
-            activeSession = session.id;
-            setSessionId(activeSession);
-            await setOfflineSessionId(userId, activeSession);
-          }
-          const created = await addCashEntryToApi(
-            activeSession,
-            item.payload as {
-              predicted_denomination: number | null;
-              confirmed_denomination: number | null;
-              confidence: number | null;
-              confirmation_status: ConfirmationStatus;
-            },
-          );
-          await deleteOfflineCashEntry(item.id);
-          await saveOfflineCashEntry(userId, { ...created, synced: true });
-          await removeSyncItem(item.id);
-        } else if (item.kind === "transaction") {
-          const saved = await createTransactionInApi(
-            item.payload as {
-              amount_kobo: number | null;
-              currency: "NGN";
-              transaction_date: string | null;
-              reference: string | null;
-              sender_label: string | null;
-              recipient_label: string | null;
-              reported_status: string | null;
-              source_type: SourceType;
-              extracted_fields: Record<string, unknown>;
-              user_confirmed: boolean;
-            },
-          );
-          await deleteOfflineTransaction(item.id);
-          await saveOfflineTransaction(userId, { ...saved, synced: true });
-          await removeSyncItem(item.id);
-        }
-      } catch {
-        await incrementSyncAttempt(item);
-      }
-    }
-
-    const remaining = await loadSyncQueue(userId);
-    setPendingSyncCount(remaining.length);
-    const [freshCash, freshTx] = await Promise.all([
-      loadOfflineCashEntries(userId),
-      loadOfflineTransactions(userId),
-    ]);
-    setCashEntries(freshCash);
-    setTransactions(freshTx);
+  const updateSyncCounters = useCallback((queue: { status?: string }[]) => {
+    setFailedSyncCount(queue.filter((i) => i.status === "failed").length);
+    setPendingSyncCount(queue.filter((i) => i.status !== "failed").length);
   }, []);
+
+  const flushSyncQueue = useCallback(
+    async (userId: string, existingSessionId: string | null, epoch: number) => {
+      if (syncInFlightRef.current) return;
+      syncInFlightRef.current = true;
+      try {
+        const queue = await loadSyncQueue(userId);
+        if (accountEpochRef.current !== epoch) return;
+        updateSyncCounters(queue);
+
+        const nowMs = Date.now();
+        const readyItems = queue.filter((i) => i.status !== "failed" && (i.nextRetryAt ?? 0) <= nowMs);
+        if (readyItems.length === 0) return;
+
+        let activeSession = existingSessionId;
+        for (const item of readyItems) {
+          if (accountEpochRef.current !== epoch) return;
+          try {
+            if (item.kind === "cash_entry") {
+              if (!activeSession) {
+                const session = await createCashSession();
+                if (accountEpochRef.current !== epoch) return;
+                activeSession = session.id;
+                setSessionId(activeSession);
+                await setOfflineSessionId(userId, activeSession);
+              }
+              const created = await addCashEntryToApi(
+                activeSession,
+                item.payload as {
+                  predicted_denomination: number | null;
+                  confirmed_denomination: number | null;
+                  confidence: number | null;
+                  confirmation_status: ConfirmationStatus;
+                },
+                item.id,
+              );
+              await deleteOfflineCashEntry(item.id);
+              await saveOfflineCashEntry(userId, { ...created, synced: true });
+              await removeSyncItem(item.id);
+            } else if (item.kind === "transaction") {
+              const saved = await createTransactionInApi(
+                item.payload as {
+                  amount_kobo: number | null;
+                  currency: "NGN";
+                  transaction_date: string | null;
+                  reference: string | null;
+                  sender_label: string | null;
+                  recipient_label: string | null;
+                  reported_status: string | null;
+                  source_type: SourceType;
+                  extracted_fields: Record<string, unknown>;
+                  user_confirmed: boolean;
+                },
+                item.id,
+              );
+              await deleteOfflineTransaction(item.id);
+              await saveOfflineTransaction(userId, { ...saved, synced: true });
+              await removeSyncItem(item.id);
+            }
+          } catch {
+            await markSyncItemRetry(item);
+          }
+        }
+
+        if (accountEpochRef.current !== epoch) return;
+        const remaining = await loadSyncQueue(userId);
+        updateSyncCounters(remaining);
+        const [freshCash, freshTx] = await Promise.all([
+          loadOfflineCashEntries(userId),
+          loadOfflineTransactions(userId),
+        ]);
+        if (accountEpochRef.current !== epoch) return;
+        setCashEntries(freshCash);
+        setTransactions(freshTx);
+      } finally {
+        syncInFlightRef.current = false;
+      }
+    },
+    [updateSyncCounters],
+  );
 
   const loadAccountState = useCallback(
     async (userId: string | null) => {
+      const epoch = ++accountEpochRef.current;
       const ns = userId ?? "guest";
       const [localPrefs, localEntries, localTx, storedSessionId, queue] = await Promise.all([
         loadOfflinePreferences(ns),
@@ -179,30 +207,46 @@ export default function HomePage() {
         getOfflineSessionId(ns),
         loadSyncQueue(ns),
       ]);
+      if (accountEpochRef.current !== epoch) return;
       setPreferences(localPrefs);
       setCashEntries(localEntries);
       setTransactions(localTx);
       setSessionId(storedSessionId);
-      setPendingSyncCount(queue.length);
+      updateSyncCounters(queue);
 
       if (!userId) return;
 
       try {
-        await flushSyncQueue(userId, storedSessionId);
+        await flushSyncQueue(userId, storedSessionId, epoch);
+        if (accountEpochRef.current !== epoch) return;
         const [remotePrefs, remoteTx] = await Promise.all([
           fetchPreferencesFromApi(),
           listTransactionsFromApi(),
         ]);
+        if (accountEpochRef.current !== epoch) return;
         setPreferences(remotePrefs);
         await saveOfflinePreferences(ns, remotePrefs);
 
-        if (remoteTx.length > 0) {
-          setTransactions(remoteTx);
-          await Promise.all(remoteTx.map((tx) => saveOfflineTransaction(ns, { ...tx, synced: true })));
-        }
+        // Reconcile remote list cleanly (including empty remote lists) while keeping unsynced local items
+        const currentLocalTx = await loadOfflineTransactions(ns);
+        const unsyncedLocal = currentLocalTx.filter((t) => !t.synced);
+        const merged = [
+          ...unsyncedLocal,
+          ...remoteTx
+            .filter((r) => !unsyncedLocal.some((u) => u.id === r.id))
+            .map((tx) => ({ ...tx, synced: true })),
+        ];
+        setTransactions(merged);
+        await Promise.all(
+          currentLocalTx
+            .filter((t) => t.synced && !remoteTx.some((r) => r.id === t.id))
+            .map((stale) => deleteOfflineTransaction(stale.id)),
+        );
+        await Promise.all(remoteTx.map((tx) => saveOfflineTransaction(ns, { ...tx, synced: true })));
 
         if (!storedSessionId) {
           const session = await createCashSession();
+          if (accountEpochRef.current !== epoch) return;
           setSessionId(session.id);
           await setOfflineSessionId(ns, session.id);
         }
@@ -210,7 +254,7 @@ export default function HomePage() {
         // Offline or API unavailable; partitioned IndexedDB remains active.
       }
     },
-    [flushSyncQueue],
+    [flushSyncQueue, updateSyncCounters],
   );
 
   // Initial hydration: verify token if present, then load partitioned IndexedDB state
@@ -242,8 +286,9 @@ export default function HomePage() {
   // Flush sync queue automatically when browser regains connectivity
   useEffect(() => {
     if (!authUserId) return;
+    const epoch = accountEpochRef.current;
     const handleOnline = () => {
-      void flushSyncQueue(authUserId, sessionId);
+      void flushSyncQueue(authUserId, sessionId, epoch);
     };
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
@@ -269,7 +314,7 @@ export default function HomePage() {
           setSessionId(activeSession);
           await setOfflineSessionId(activeNamespace, activeSession);
         }
-        const created = await addCashEntryToApi(activeSession, input);
+        const created = await addCashEntryToApi(activeSession, input, localId);
         const syncedEntry: CashEntry = { ...created, synced: true };
         setCashEntries((prev) => [...prev, syncedEntry]);
         await saveOfflineCashEntry(activeNamespace, syncedEntry);
@@ -282,6 +327,8 @@ export default function HomePage() {
           kind: "cash_entry",
           payload: input,
           attempts: 0,
+          status: "pending",
+          nextRetryAt: Date.now() + 1500,
           created_at: new Date().toISOString(),
         });
         setPendingSyncCount((c) => c + 1);
@@ -350,7 +397,7 @@ export default function HomePage() {
 
     if (authUserId) {
       try {
-        const saved = await createTransactionInApi(payload);
+        const saved = await createTransactionInApi(payload, localId);
         const synced: TransactionRecord = { ...saved, synced: true };
         setTransactions((prev) => [synced, ...prev]);
         await saveOfflineTransaction(activeNamespace, synced);
@@ -362,6 +409,8 @@ export default function HomePage() {
           kind: "transaction",
           payload,
           attempts: 0,
+          status: "pending",
+          nextRetryAt: Date.now() + 1500,
           created_at: new Date().toISOString(),
         });
         setPendingSyncCount((c) => c + 1);
@@ -408,9 +457,11 @@ export default function HomePage() {
 
   const syncLabel = !authUserId
     ? "Local-only mode"
-    : pendingSyncCount > 0
-      ? `${pendingSyncCount} pending sync`
-      : "Synced";
+    : failedSyncCount > 0
+      ? `${failedSyncCount} sync failed`
+      : pendingSyncCount > 0
+        ? `${pendingSyncCount} pending sync`
+        : "Synced";
 
   return (
     <>

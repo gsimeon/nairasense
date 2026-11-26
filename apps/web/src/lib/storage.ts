@@ -40,8 +40,12 @@ export type PendingSyncItem = {
         user_confirmed: boolean;
       };
   attempts: number;
+  status: "pending" | "failed";
+  nextRetryAt: number;
   created_at: string;
 };
+
+const MAX_SYNC_ATTEMPTS = 5;
 
 type Namespaced<T> = T & { _ns: string };
 
@@ -210,6 +214,14 @@ export async function removeSyncItem(id: string): Promise<void> {
   await deleteFromStore(STORE_SYNC, id);
 }
 
-export async function incrementSyncAttempt(item: PendingSyncItem): Promise<void> {
-  await putInStore(STORE_SYNC, { ...item, attempts: item.attempts + 1 });
+export async function markSyncItemRetry(item: PendingSyncItem): Promise<void> {
+  const nextAttempts = item.attempts + 1;
+  const isFailed = nextAttempts >= MAX_SYNC_ATTEMPTS;
+  const backoffMs = Math.min(60_000, 1500 * 2 ** item.attempts);
+  await putInStore(STORE_SYNC, {
+    ...item,
+    attempts: nextAttempts,
+    status: isFailed ? "failed" : "pending",
+    nextRetryAt: Date.now() + backoffMs,
+  });
 }

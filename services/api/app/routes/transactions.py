@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.auth import AuthUser, get_current_user
 from app.db import get_conn, parse_json_dict
@@ -62,17 +62,27 @@ def extract_transaction(payload: TransactionExtractRequest) -> TransactionExtrac
 def create_transaction(
     payload: TransactionCreate,
     current_user: Annotated[AuthUser, Depends(get_current_user)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> TransactionResponse:
+    clean_key = idempotency_key.strip() if idempotency_key else None
     tx_id = str(uuid4())
     now = _now_iso()
     with get_conn() as conn:
+        if clean_key:
+            existing = conn.execute(
+                "SELECT * FROM transaction_records WHERE user_id = ? AND idempotency_key = ?",
+                (current_user.user_id, clean_key),
+            ).fetchone()
+            if existing is not None:
+                return _row_to_response(existing)
+
         conn.execute(
             """
             INSERT INTO transaction_records (
                 id, user_id, amount_kobo, currency, transaction_date, reference,
                 sender_label, recipient_label, reported_status, source_type,
-                extracted_fields, user_confirmed, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                extracted_fields, user_confirmed, idempotency_key, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 tx_id,
@@ -87,6 +97,7 @@ def create_transaction(
                 payload.source_type,
                 json.dumps(payload.extracted_fields),
                 1 if payload.user_confirmed else 0,
+                clean_key,
                 now,
                 now,
             ),

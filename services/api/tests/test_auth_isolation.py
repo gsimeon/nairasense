@@ -144,3 +144,39 @@ def test_enrollment_is_user_isolated(monkeypatch) -> None:
     ).json()
     assert "COLOR_PRIOR_ONLY_ENROLL_SAMPLES_FOR_HIGHER_ACCURACY" not in alice_infer["image_quality"]["warnings"]
     assert "COLOR_PRIOR_ONLY_ENROLL_SAMPLES_FOR_HIGHER_ACCURACY" in bob_infer["image_quality"]["warnings"]
+
+
+def test_idempotency_prevents_duplicate_cash_and_transactions() -> None:
+    headers = {**_register_headers("idem_user"), "Idempotency-Key": "op-cash-1"}
+    session_id = client.post("/api/v1/cash/sessions", headers=headers).json()["id"]
+
+    e1 = client.post(
+        f"/api/v1/cash/sessions/{session_id}/entries",
+        headers=headers,
+        json={"confirmed_denomination": 1000, "confirmation_status": "confirmed"},
+    )
+    e2 = client.post(
+        f"/api/v1/cash/sessions/{session_id}/entries",
+        headers=headers,
+        json={"confirmed_denomination": 1000, "confirmation_status": "confirmed"},
+    )
+    assert e1.status_code == 201
+    assert e2.status_code == 201
+    assert e1.json()["id"] == e2.json()["id"]
+    session = client.get(f"/api/v1/cash/sessions/{session_id}", headers=headers).json()
+    assert session["confirmed_total_ngn"] == 1000
+    assert session["confirmed_count"] == 1
+
+    tx_headers = {**headers, "Idempotency-Key": "op-tx-1"}
+    t1 = client.post(
+        "/api/v1/transactions",
+        headers=tx_headers,
+        json={"amount_kobo": 250000, "currency": "NGN", "source_type": "pasted_text"},
+    )
+    t2 = client.post(
+        "/api/v1/transactions",
+        headers=tx_headers,
+        json={"amount_kobo": 250000, "currency": "NGN", "source_type": "pasted_text"},
+    )
+    assert t1.json()["id"] == t2.json()["id"]
+    assert len(client.get("/api/v1/transactions", headers=tx_headers).json()) == 1

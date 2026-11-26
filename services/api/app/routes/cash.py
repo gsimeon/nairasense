@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 
 from app.auth import AuthUser, get_current_user, get_optional_current_user
 from app.db import VALID_DENOMINATIONS, get_conn
@@ -191,7 +191,9 @@ def add_cash_entry(
     session_id: str,
     payload: CashEntryCreate,
     current_user: Annotated[AuthUser, Depends(get_current_user)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> CashEntryResponse:
+    clean_key = idempotency_key.strip() if idempotency_key else None
     with get_conn() as conn:
         session_row = conn.execute(
             "SELECT id FROM cash_sessions WHERE id = ? AND user_id = ?",
@@ -200,14 +202,36 @@ def add_cash_entry(
         if session_row is None:
             raise HTTPException(status_code=404, detail="Cash session not found.")
 
+        if clean_key:
+            existing = conn.execute(
+                """
+                SELECT id, session_id, predicted_denomination, confirmed_denomination,
+                       confidence, confirmation_status, created_at
+                FROM cash_entries
+                WHERE user_id = ? AND idempotency_key = ?
+                """,
+                (current_user.user_id, clean_key),
+            ).fetchone()
+            if existing is not None:
+                return CashEntryResponse(
+                    id=existing["id"],
+                    session_id=existing["session_id"],
+                    predicted_denomination=existing["predicted_denomination"],
+                    confirmed_denomination=existing["confirmed_denomination"],
+                    confidence=existing["confidence"],
+                    confirmation_status=existing["confirmation_status"],
+                    created_at=existing["created_at"],
+                )
+
         entry_id = str(uuid4())
         now = _now_iso()
         conn.execute(
             """
             INSERT INTO cash_entries (
                 id, session_id, user_id, predicted_denomination,
-                confirmed_denomination, confidence, confirmation_status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                confirmed_denomination, confidence, confirmation_status,
+                idempotency_key, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 entry_id,
@@ -217,6 +241,7 @@ def add_cash_entry(
                 payload.confirmed_denomination,
                 payload.confidence,
                 payload.confirmation_status,
+                clean_key,
                 now,
             ),
         )

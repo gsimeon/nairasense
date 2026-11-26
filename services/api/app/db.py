@@ -34,10 +34,13 @@ CREATE TABLE IF NOT EXISTS cash_entries (
     confirmation_status TEXT NOT NULL CHECK (
         confirmation_status IN ('pending', 'confirmed', 'corrected', 'rejected')
     ),
+    idempotency_key TEXT,
     created_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_cash_entries_session ON cash_entries(session_id, created_at ASC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_entries_idempotency
+    ON cash_entries(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS transaction_records (
     id TEXT PRIMARY KEY,
@@ -54,9 +57,13 @@ CREATE TABLE IF NOT EXISTS transaction_records (
     ),
     extracted_fields TEXT NOT NULL DEFAULT '{}',
     user_confirmed INTEGER NOT NULL DEFAULT 0,
+    idempotency_key TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_idempotency
+    ON transaction_records(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS user_preferences (
     user_id TEXT PRIMARY KEY,

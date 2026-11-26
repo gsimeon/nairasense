@@ -112,9 +112,11 @@ export async function addCashEntryToApi(
     confidence: number | null;
     confirmation_status: ConfirmationStatus;
   },
+  idempotencyKey?: string,
 ): Promise<CashEntry> {
   return requestJson<CashEntry>(`/cash/sessions/${sessionId}/entries`, {
     method: "POST",
+    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     body: JSON.stringify(payload),
   });
 }
@@ -133,20 +135,24 @@ export async function extractTransactionText(
   });
 }
 
-export async function createTransactionInApi(payload: {
-  amount_kobo: number | null;
-  currency: "NGN";
-  transaction_date: string | null;
-  reference: string | null;
-  sender_label: string | null;
-  recipient_label: string | null;
-  reported_status: string | null;
-  source_type: SourceType;
-  extracted_fields: Record<string, unknown>;
-  user_confirmed: boolean;
-}): Promise<TransactionRecord> {
+export async function createTransactionInApi(
+  payload: {
+    amount_kobo: number | null;
+    currency: "NGN";
+    transaction_date: string | null;
+    reference: string | null;
+    sender_label: string | null;
+    recipient_label: string | null;
+    reported_status: string | null;
+    source_type: SourceType;
+    extracted_fields: Record<string, unknown>;
+    user_confirmed: boolean;
+  },
+  idempotencyKey?: string,
+): Promise<TransactionRecord> {
   return requestJson<TransactionRecord>("/transactions", {
     method: "POST",
+    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     body: JSON.stringify(payload),
   });
 }

@@ -2,7 +2,7 @@
 
 Accessible, voice-first financial information companion for blind and low-vision Nigerians.
 
-> **Prototype stage — not production-ready.** NairaSense implements live camera capture, an experimental offline pixel-based banknote classifier (`local-naira-cv`), browser-based receipt OCR (`tesseract.js`), spoken feedback (`MoneyVoice`), IndexedDB offline storage, and a FastAPI backend. It does **not** yet have a trained/validated Naira banknote vision model, multi-user authentication, PostgreSQL runtime persistence, or a formal screen-reader accessibility audit.
+> **Prototype stage — not production-ready.** NairaSense implements live camera capture, an experimental offline pixel-based banknote baseline (`local-naira-cv`), browser-based receipt OCR (`tesseract.js`), spoken feedback (`MoneyVoice`), account-partitioned IndexedDB storage with an idempotent sync queue, and an `Argon2id` + `PyJWT` FastAPI backend. It does **not** yet have a trained/validated Naira banknote model, PostgreSQL runtime persistence, or a formal screen-reader accessibility audit.
 
 ## Architecture (current vs. target)
 
@@ -13,17 +13,17 @@ Accessible, voice-first financial information companion for blind and low-vision
 
 ## Implementation status
 
-| Area | Current Status |
-|---|---|
-| CashSense live camera + photo capture | Implemented (with brightness/blur checks & user confirmation) |
-| Banknote recognition (`local-naira-cv`) | Experimental HSV/spatial color baseline; **not** a trained/validated vision model |
-| TransactionSense | OCR-assisted extraction (`tesseract.js` + regex) with field-level user review |
-| MoneyVoice & accessibility controls | Web Speech synthesis, repeat/stop, chimes/haptics, text size, high contrast |
-| IndexedDB & Service Worker | Implemented for local records, preferences, and static asset caching |
-| Authentication & user isolation | Implemented (`Argon2id` + `PyJWT` HS256); per-user ownership on sessions, transactions, and preferences |
-| Upload & inference hardening | `/cash/infer` is rate-limited anonymous triage with 8 MB bounded streaming reads, magic-byte checks, and 12 MP pixel caps |
-| PostgreSQL integration | Schema & Docker Compose drafted; runtime currently uses SQLite |
-| Screen-reader audit (TalkBack/NVDA/VoiceOver) | **Not yet performed** |
+| Area | Maturity | Details |
+|---|---|---|
+| CashSense capture & deterministic totals | Implemented | Live camera + photo upload, brightness/blur checks, user confirmation/correction |
+| Authentication & user isolation | Implemented (prototype) | `Argon2id` + `PyJWT` HS256, production secret guard, per-user ownership & idempotency keys |
+| Upload & inference hardening | Implemented (prototype) | Rate-limited `/cash/infer` with 8 MB bounded streaming reads, magic-byte checks, 12 MP pixel caps |
+| IndexedDB & offline sync queue | Partially implemented | Account-partitioned IndexedDB, single-flight sync lock, idempotency keys, exponential backoff |
+| TransactionSense | Partially implemented | In-browser `tesseract.js` OCR + regex extraction with field-level user review |
+| MoneyVoice & accessibility UI | Partially implemented | Web Speech synthesis, repeat/stop, chimes/haptics, text size, high contrast, ARIA tab keys |
+| Banknote recognition (`local-naira-cv`) | Experimental | HSV/spatial color baseline; **not** a trained/validated Naira banknote model |
+| PostgreSQL integration | Planned | Schema & Docker Compose drafted; runtime currently uses SQLite (`nairasense_dev.db`) |
+| Screen-reader audit (TalkBack/NVDA/VoiceOver) | Not yet validated | Lived-experience usability testing has not yet been performed |
 
 ## Repository layout
 
@@ -94,7 +94,7 @@ npm run build
 
 ## Validation & important limitations
 
-- **Backend:** `ruff check app tests` and `pytest` (18 tests covering health, auth/JWT/Argon2id, cross-user isolation, bounded upload/pixel checks, cash sessions, local baseline classifier, user-isolated opt-in enrollment, transaction extraction/CRUD, and preferences).
+- **Backend:** `ruff check app tests` and `pytest` (19 tests covering health, auth/JWT/Argon2id, cross-user isolation, idempotency keys, bounded upload/pixel checks, cash sessions, local baseline classifier, user-isolated opt-in enrollment, transaction extraction/CRUD, and preferences).
 - **Frontend:** `npm run typecheck`, `npm run lint`, and `npm run build`.
 - **Important:** API tests use synthetic textured PNGs, not genuine Naira banknote photographs. Do not treat baseline match scores as calibrated accuracy.
 
