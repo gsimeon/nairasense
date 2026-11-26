@@ -19,8 +19,14 @@ const STORE_SYNC = "sync_queue";
 export type PendingSyncItem = {
   id: string;
   namespace: string;
-  kind: "cash_entry" | "transaction";
-  payload:
+  kind:
+    | "cash_entry"
+    | "transaction"
+    | "delete_cash_entry"
+    | "delete_transaction"
+    | "clear_cash_session";
+  targetId?: string;
+  payload?:
     | {
         predicted_denomination: number | null;
         confirmed_denomination: number | null;
@@ -42,6 +48,7 @@ export type PendingSyncItem = {
   attempts: number;
   status: "pending" | "failed";
   nextRetryAt: number;
+  lastError?: string;
   created_at: string;
 };
 
@@ -214,7 +221,7 @@ export async function removeSyncItem(id: string): Promise<void> {
   await deleteFromStore(STORE_SYNC, id);
 }
 
-export async function markSyncItemRetry(item: PendingSyncItem): Promise<void> {
+export async function markSyncItemRetry(item: PendingSyncItem, errorMessage?: string): Promise<void> {
   const nextAttempts = item.attempts + 1;
   const isFailed = nextAttempts >= MAX_SYNC_ATTEMPTS;
   const backoffMs = Math.min(60_000, 1500 * 2 ** item.attempts);
@@ -223,7 +230,20 @@ export async function markSyncItemRetry(item: PendingSyncItem): Promise<void> {
     attempts: nextAttempts,
     status: isFailed ? "failed" : "pending",
     nextRetryAt: Date.now() + backoffMs,
+    lastError: errorMessage ?? item.lastError,
   });
+}
+
+export async function getLastSyncedAt(namespace: string): Promise<string | null> {
+  try {
+    return await getMeta<string>(`${namespace}:last_synced_at`);
+  } catch {
+    return null;
+  }
+}
+
+export async function setLastSyncedAt(namespace: string, iso: string): Promise<void> {
+  await putInStore(STORE_META, iso, `${namespace}:last_synced_at`);
 }
 
 export async function resetFailedSyncItems(namespace: string): Promise<void> {

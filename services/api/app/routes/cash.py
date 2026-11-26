@@ -282,6 +282,20 @@ def add_cash_entry(
     )
 
 
+@router.delete("/sessions/{session_id}", status_code=204)
+def delete_cash_session(
+    session_id: str,
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
+) -> None:
+    with get_conn() as conn:
+        cursor = conn.execute(
+            "DELETE FROM cash_sessions WHERE id = ? AND user_id = ?",
+            (session_id, current_user.user_id),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Cash session not found.")
+
+
 @router.delete("/entries/{entry_id}", status_code=204)
 def delete_cash_entry(
     entry_id: str,

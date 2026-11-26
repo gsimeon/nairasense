@@ -200,3 +200,9 @@ def test_idempotency_prevents_duplicate_cash_and_transactions() -> None:
     sessions = client.get("/api/v1/cash/sessions", headers=headers).json()
     assert len(sessions) == 1
     assert sessions[0]["confirmed_total_ngn"] == 1000
+
+    # Cross-user session delete is blocked, owner delete succeeds
+    other_headers = _register_headers("other_del_user")
+    assert client.delete(f"/api/v1/cash/sessions/{session_id}", headers=other_headers).status_code == 404
+    assert client.delete(f"/api/v1/cash/sessions/{session_id}", headers=headers).status_code == 204
+    assert client.get("/api/v1/cash/sessions", headers=headers).json() == []

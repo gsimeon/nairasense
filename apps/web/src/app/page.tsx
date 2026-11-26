@@ -11,6 +11,7 @@ import {
   createCashSession,
   createTransactionInApi,
   deleteCashEntryFromApi,
+  deleteCashSessionFromApi,
   deleteTransactionFromApi,
   fetchCurrentUser,
   fetchPreferencesFromApi,
@@ -25,6 +26,7 @@ import {
   deleteOfflineCashEntry,
   deleteOfflineTransaction,
   enqueueSyncItem,
+  getLastSyncedAt,
   getOfflineSessionId,
   loadOfflineCashEntries,
   loadOfflinePreferences,
@@ -36,6 +38,7 @@ import {
   saveOfflineCashEntry,
   saveOfflinePreferences,
   saveOfflineTransaction,
+  setLastSyncedAt,
   setOfflineSessionId,
 } from "@/lib/storage";
 import {
@@ -56,6 +59,7 @@ export default function HomePage() {
   const [authUsername, setAuthUsername] = useState<string | null>(null);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [failedSyncCount, setFailedSyncCount] = useState(0);
+  const [lastSyncedAt, setLastSyncedAtState] = useState<string | null>(null);
   const syncInFlightRef = useRef(false);
   const pendingResyncRef = useRef<{ userId: string; sessionId: string | null; epoch: number } | null>(
     null,
@@ -182,15 +186,41 @@ export default function HomePage() {
               await deleteOfflineTransaction(item.id);
               await saveOfflineTransaction(userId, { ...saved, synced: true });
               await removeSyncItem(item.id);
+            } else if (item.kind === "delete_cash_entry" && item.targetId) {
+              try {
+                await deleteCashEntryFromApi(item.targetId);
+              } catch (err) {
+                if (!(err instanceof Error && err.message.includes("(404)"))) throw err;
+              }
+              await removeSyncItem(item.id);
+            } else if (item.kind === "delete_transaction" && item.targetId) {
+              try {
+                await deleteTransactionFromApi(item.targetId);
+              } catch (err) {
+                if (!(err instanceof Error && err.message.includes("(404)"))) throw err;
+              }
+              await removeSyncItem(item.id);
+            } else if (item.kind === "clear_cash_session" && item.targetId) {
+              try {
+                await deleteCashSessionFromApi(item.targetId);
+              } catch (err) {
+                if (!(err instanceof Error && err.message.includes("(404)"))) throw err;
+              }
+              await removeSyncItem(item.id);
             }
-          } catch {
-            await markSyncItemRetry(item);
+          } catch (err) {
+            await markSyncItemRetry(item, err instanceof Error ? err.message : "Sync failed");
           }
         }
 
         if (accountEpochRef.current !== epoch) return;
         const remaining = await loadSyncQueue(userId);
         updateSyncCounters(remaining);
+        if (remaining.length === 0) {
+          const syncedNow = new Date().toISOString();
+          await setLastSyncedAt(userId, syncedNow);
+          setLastSyncedAtState(syncedNow);
+        }
         const [freshCash, freshTx] = await Promise.all([
           loadOfflineCashEntries(userId),
           loadOfflineTransactions(userId),
@@ -214,18 +244,21 @@ export default function HomePage() {
     async (userId: string | null) => {
       const epoch = ++accountEpochRef.current;
       const ns = userId ?? "guest";
-      const [localPrefs, localEntries, localTx, storedSessionId, queue] = await Promise.all([
-        loadOfflinePreferences(ns),
-        loadOfflineCashEntries(ns),
-        loadOfflineTransactions(ns),
-        getOfflineSessionId(ns),
-        loadSyncQueue(ns),
-      ]);
+      const [localPrefs, localEntries, localTx, storedSessionId, queue, syncedIso] =
+        await Promise.all([
+          loadOfflinePreferences(ns),
+          loadOfflineCashEntries(ns),
+          loadOfflineTransactions(ns),
+          getOfflineSessionId(ns),
+          loadSyncQueue(ns),
+          getLastSyncedAt(ns),
+        ]);
       if (accountEpochRef.current !== epoch) return;
       setPreferences(localPrefs);
       setCashEntries(localEntries);
       setTransactions(localTx);
       setSessionId(storedSessionId);
+      setLastSyncedAtState(syncedIso);
       updateSyncCounters(queue);
 
       if (!userId) return;
@@ -233,31 +266,44 @@ export default function HomePage() {
       try {
         await flushSyncQueue(userId, storedSessionId, epoch);
         if (accountEpochRef.current !== epoch) return;
-        const [remotePrefs, remoteTx, remoteSessions] = await Promise.all([
+        const [remotePrefs, remoteTx, remoteSessions, activeQueue] = await Promise.all([
           fetchPreferencesFromApi(),
           listTransactionsFromApi(),
           listCashSessionsFromApi(),
+          loadSyncQueue(ns),
         ]);
         if (accountEpochRef.current !== epoch) return;
         setPreferences(remotePrefs);
         await saveOfflinePreferences(ns, remotePrefs);
 
-        // Restore latest remote cash session and reconcile with unsynced local entries
-        if (remoteSessions.length > 0) {
-          const latest = remoteSessions[0];
+        const deletedEntryIds = new Set(
+          activeQueue.filter((q) => q.kind === "delete_cash_entry").map((q) => q.targetId),
+        );
+        const clearedSessionIds = new Set(
+          activeQueue.filter((q) => q.kind === "clear_cash_session").map((q) => q.targetId),
+        );
+        const deletedTxIds = new Set(
+          activeQueue.filter((q) => q.kind === "delete_transaction").map((q) => q.targetId),
+        );
+
+        // Reconcile entries across all non-cleared remote sessions
+        const visibleSessions = remoteSessions.filter((s) => !clearedSessionIds.has(s.id));
+        if (visibleSessions.length > 0) {
+          const latest = visibleSessions[0];
           setSessionId(latest.id);
           await setOfflineSessionId(ns, latest.id);
+          const allRemoteEntries = visibleSessions
+            .flatMap((s) => s.entries)
+            .filter((e) => !deletedEntryIds.has(e.id))
+            .map((e) => ({ ...e, synced: true }));
           const currentLocalCash = await loadOfflineCashEntries(ns);
           const unsyncedCash = currentLocalCash.filter((e) => !e.synced);
-          const remoteEntries = latest.entries.map((e) => ({ ...e, synced: true }));
           const mergedCash = [
-            ...remoteEntries,
-            ...unsyncedCash.filter((u) => !remoteEntries.some((r) => r.id === u.id)),
+            ...allRemoteEntries,
+            ...unsyncedCash.filter((u) => !allRemoteEntries.some((r) => r.id === u.id)),
           ];
           setCashEntries(mergedCash);
-          await Promise.all(
-            latest.entries.map((e) => saveOfflineCashEntry(ns, { ...e, synced: true })),
-          );
+          await Promise.all(allRemoteEntries.map((e) => saveOfflineCashEntry(ns, e)));
         } else if (!storedSessionId) {
           const session = await createCashSession();
           if (accountEpochRef.current !== epoch) return;
@@ -265,22 +311,25 @@ export default function HomePage() {
           await setOfflineSessionId(ns, session.id);
         }
 
-        // Reconcile remote transaction list cleanly (including empty remote lists)
+        // Reconcile remote transaction list cleanly while respecting pending delete tombstones
+        const visibleRemoteTx = remoteTx.filter((t) => !deletedTxIds.has(t.id));
         const currentLocalTx = await loadOfflineTransactions(ns);
         const unsyncedLocal = currentLocalTx.filter((t) => !t.synced);
         const merged = [
           ...unsyncedLocal,
-          ...remoteTx
+          ...visibleRemoteTx
             .filter((r) => !unsyncedLocal.some((u) => u.id === r.id))
             .map((tx) => ({ ...tx, synced: true })),
         ];
         setTransactions(merged);
         await Promise.all(
           currentLocalTx
-            .filter((t) => t.synced && !remoteTx.some((r) => r.id === t.id))
+            .filter((t) => t.synced && !visibleRemoteTx.some((r) => r.id === t.id))
             .map((stale) => deleteOfflineTransaction(stale.id)),
         );
-        await Promise.all(remoteTx.map((tx) => saveOfflineTransaction(ns, { ...tx, synced: true })));
+        await Promise.all(
+          visibleRemoteTx.map((tx) => saveOfflineTransaction(ns, { ...tx, synced: true })),
+        );
       } catch {
         // Offline or API unavailable; partitioned IndexedDB remains active.
       }
@@ -388,15 +437,43 @@ export default function HomePage() {
       try {
         await deleteCashEntryFromApi(entryId);
       } catch {
-        // Already removed locally
+        await enqueueSyncItem({
+          id: `del-cash-${entryId}`,
+          namespace: activeNamespace,
+          kind: "delete_cash_entry",
+          targetId: entryId,
+          attempts: 0,
+          status: "pending",
+          nextRetryAt: Date.now() + 1500,
+          created_at: new Date().toISOString(),
+        });
+        setPendingSyncCount((c) => c + 1);
       }
     }
   }
 
   async function handleClearCashSession() {
+    const previousSessionId = sessionId;
     setCashEntries([]);
     await clearOfflineCashEntries(activeNamespace);
     if (authUserId) {
+      if (previousSessionId) {
+        try {
+          await deleteCashSessionFromApi(previousSessionId);
+        } catch {
+          await enqueueSyncItem({
+            id: `clr-sess-${previousSessionId}`,
+            namespace: activeNamespace,
+            kind: "clear_cash_session",
+            targetId: previousSessionId,
+            attempts: 0,
+            status: "pending",
+            nextRetryAt: Date.now() + 1500,
+            created_at: new Date().toISOString(),
+          });
+          setPendingSyncCount((c) => c + 1);
+        }
+      }
       try {
         const session = await createCashSession();
         setSessionId(session.id);
@@ -468,7 +545,17 @@ export default function HomePage() {
       try {
         await deleteTransactionFromApi(id);
       } catch {
-        // Already removed locally
+        await enqueueSyncItem({
+          id: `del-tx-${id}`,
+          namespace: activeNamespace,
+          kind: "delete_transaction",
+          targetId: id,
+          attempts: 0,
+          status: "pending",
+          nextRetryAt: Date.now() + 1500,
+          created_at: new Date().toISOString(),
+        });
+        setPendingSyncCount((c) => c + 1);
       }
     }
   }
@@ -506,7 +593,11 @@ export default function HomePage() {
             NairaSense
           </a>
           <div className="voice-controls" role="region" aria-label="MoneyVoice and account controls">
-            <span className="tag" aria-live="polite">
+            <span
+              className="tag"
+              aria-live="polite"
+              title={lastSyncedAt ? `Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}` : undefined}
+            >
               {syncLabel}
             </span>
             {authUserId && failedSyncCount > 0 && (

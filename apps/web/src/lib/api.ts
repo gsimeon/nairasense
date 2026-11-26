@@ -117,6 +117,10 @@ export async function listCashSessionsFromApi(): Promise<CashSessionSummary[]> {
   return requestJson<CashSessionSummary[]>("/cash/sessions");
 }
 
+export async function deleteCashSessionFromApi(sessionId: string): Promise<void> {
+  return requestJson<void>(`/cash/sessions/${sessionId}`, { method: "DELETE" });
+}
+
 export async function addCashEntryToApi(
   sessionId: string,
   payload: {

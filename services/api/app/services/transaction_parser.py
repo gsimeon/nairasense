@@ -37,6 +37,13 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     This is a heuristic text parser for user review; it does not verify bank settlement.
     """
     amount_kobo: int | None = None
+    candidate_amounts_ngn: list[str] = []
+    all_amounts = _AMOUNT_PATTERN.findall(raw_text)
+    for raw_num in all_amounts:
+        cleaned_num = raw_num.replace(",", "")
+        if cleaned_num not in candidate_amounts_ngn:
+            candidate_amounts_ngn.append(cleaned_num)
+
     amount_match = _AMOUNT_PATTERN.search(raw_text)
     if amount_match:
         numeric_str = amount_match.group(1).replace(",", "")
@@ -82,7 +89,9 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
         "recipient_label": recipient_label,
         "reported_status": reported_status,
         "extracted_fields": {
-            "parser": "deterministic-regex-v1",
+            "parser": "deterministic-regex-v2",
             "matched_amount_token": amount_match.group(0) if amount_match else None,
+            "multiple_amounts_detected": len(candidate_amounts_ngn) > 1,
+            "candidate_amounts_ngn": candidate_amounts_ngn,
         },
     }

@@ -84,12 +84,17 @@ export function TransactionSensePanel({
       setTxDate(extracted.transaction_date ?? "");
       setDisclaimer(extracted.disclaimer);
       setReviewing(true);
+      const multiAmt = Boolean(
+        "extracted_fields" in extracted &&
+          extracted.extracted_fields &&
+          (extracted.extracted_fields as Record<string, unknown>).multiple_amounts_detected,
+      );
       const spokenAmt =
         extracted.amount_kobo !== null
           ? `${(extracted.amount_kobo / 100).toLocaleString("en-NG")} Naira`
           : "unknown amount";
       onAnnounce(
-        `Extracted ${extracted.reported_status ?? "transaction"} for ${spokenAmt}. Review each field before saving.`,
+        `Extracted ${extracted.reported_status ?? "transaction"} for ${spokenAmt}. ${multiAmt ? "Multiple amounts were found in this text—check the amount field carefully. " : ""}Review each field before saving.`,
         true,
       );
     } finally {
@@ -111,10 +116,10 @@ export function TransactionSensePanel({
     setOcrBusy(true);
     setSourceType("receipt");
     onAnnounce("Reading receipt image with offline OCR. Please wait.", true);
+    let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
     try {
-      const worker = await createWorker("eng");
+      worker = await createWorker("eng");
       const { data } = await worker.recognize(file);
-      await worker.terminate();
       const text = data.text.trim();
       if (!text) {
         onAnnounce("No readable text found in the receipt image. Try a clearer photo.", true);
@@ -125,6 +130,9 @@ export function TransactionSensePanel({
     } catch {
       onAnnounce("Offline OCR could not process that image. You can paste the text manually.", true);
     } finally {
+      if (worker) {
+        await worker.terminate().catch(() => {});
+      }
       setOcrBusy(false);
     }
   }

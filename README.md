@@ -94,7 +94,7 @@ npm run build
 
 ## Validation & important limitations
 
-- **Backend:** `ruff check app tests` and `pytest` (19 tests covering health, auth/JWT/Argon2id, cross-user isolation, idempotency keys, bounded upload/pixel checks, cash sessions, local baseline classifier, user-isolated opt-in enrollment, transaction extraction/CRUD, and preferences).
+- **Backend:** `ruff check app tests` and `pytest` (20 tests covering health, auth/JWT/Argon2id, cross-user isolation, idempotency keys, session deletion, multi-amount parsing, bounded upload/pixel checks, cash sessions, local baseline classifier, user-isolated opt-in enrollment, transaction extraction/CRUD, and preferences).
 - **Frontend:** `npm run typecheck`, `npm run lint`, and `npm run build`.
 - **Important:** API tests use synthetic textured PNGs, not genuine Naira banknote photographs. Do not treat baseline match scores as calibrated accuracy.
 

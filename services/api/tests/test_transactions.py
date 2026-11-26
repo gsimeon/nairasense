@@ -27,6 +27,20 @@ def test_extract_transaction_parses_naira_alert() -> None:
     assert data["requires_user_confirmation"] is True
 
 
+def test_extract_transaction_flags_multiple_amounts() -> None:
+    res = client.post(
+        "/api/v1/transactions/extract",
+        json={
+            "raw_text": "Debit NGN 5,000.00. Fee: NGN 50.00. Avail Bal: NGN 25,000.00. Successful.",
+            "source_type": "notification",
+        },
+    )
+    assert res.status_code == 200
+    fields = res.json()["extracted_fields"]
+    assert fields["multiple_amounts_detected"] is True
+    assert fields["candidate_amounts_ngn"] == ["5000.00", "50.00", "25000.00"]
+
+
 def test_transaction_crud_lifecycle() -> None:
     reg = client.post(
         "/api/v1/auth/register",
