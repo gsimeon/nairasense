@@ -25,6 +25,27 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+_READ_CHUNK_BYTES = 64 * 1024
+
+
+async def _read_upload_bounded(image: UploadFile, max_bytes: int = _MAX_UPLOAD_BYTES) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await image.read(_READ_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(status_code=413, detail="Image exceeds the 8 MB prototype limit.")
+        chunks.append(chunk)
+    content = b"".join(chunks)
+    if not content:
+        raise HTTPException(status_code=400, detail="The uploaded image is empty.")
+    return content
+
+
 def _has_valid_image_magic(content: bytes, content_type: str) -> bool:
     if content_type == "image/jpeg":
         return content.startswith(b"\xff\xd8\xff")
@@ -91,15 +112,16 @@ def _load_session(session_id: str, user_id: str) -> CashSessionResponse:
 async def infer_banknote(
     image: Annotated[UploadFile, File(...)],
 ) -> CashInferenceResponse:
+    """Stateless banknote denomination suggestion endpoint.
+
+    Intentionally accessible without login for single-device demo/triage, protected by
+    IP rate limiting, bounded 8 MB streaming reads, and MIME/magic-byte validation.
+    """
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
     if image.content_type not in allowed_types:
         raise HTTPException(status_code=415, detail="Upload a JPEG, PNG or WebP image.")
 
-    content = await image.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="The uploaded image is empty.")
-    if len(content) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Image exceeds the 8 MB prototype limit.")
+    content = await _read_upload_bounded(image)
     if not _has_valid_image_magic(content, image.content_type):
         raise HTTPException(status_code=415, detail="Uploaded file bytes do not match image type.")
 
@@ -108,14 +130,14 @@ async def infer_banknote(
 
 @router.get("/enrollments")
 def list_enrollments(
-    _current_user: Annotated[AuthUser, Depends(get_current_user)],
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
 ) -> dict[str, object]:
-    return {"counts": get_enrollment_counts()}
+    return {"counts": get_enrollment_counts(current_user.user_id)}
 
 
 @router.post("/enroll")
 async def enroll_banknote(
-    _current_user: Annotated[AuthUser, Depends(get_current_user)],
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
     denomination_ngn: Annotated[int, Form(...)],
     image: Annotated[UploadFile, File(...)],
 ) -> dict[str, object]:
@@ -129,15 +151,11 @@ async def enroll_banknote(
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
     if image.content_type not in allowed_types:
         raise HTTPException(status_code=415, detail="Upload a JPEG, PNG or WebP image.")
-    content = await image.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="The uploaded image is empty.")
-    if len(content) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Image exceeds the 8 MB prototype limit.")
+    content = await _read_upload_bounded(image)
     if not _has_valid_image_magic(content, image.content_type):
         raise HTTPException(status_code=415, detail="Uploaded file bytes do not match image type.")
     try:
-        return enroll_note_sample(content, denomination_ngn)
+        return enroll_note_sample(content, denomination_ngn, current_user.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

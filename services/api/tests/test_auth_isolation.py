@@ -1,6 +1,12 @@
+import time
+
+import jwt
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.settings import settings
+from tests.test_cash import _make_textured_png
 
 client = TestClient(app)
 
@@ -71,3 +77,55 @@ def test_cross_user_isolation_cash_and_transactions() -> None:
         == 404
     )
     assert client.delete(f"/api/v1/transactions/{b_tx}", headers=headers_a).status_code == 404
+
+
+def test_expired_jwt_is_rejected() -> None:
+    expired = jwt.encode(
+        {
+            "sub": "user-123",
+            "username": "expired_user",
+            "iss": settings.jwt_issuer,
+            "aud": settings.jwt_audience,
+            "iat": int(time.time()) - 200,
+            "exp": int(time.time()) - 10,
+        },
+        settings.auth_secret,
+        algorithm="HS256",
+    )
+    res = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {expired}"})
+    assert res.status_code == 401
+
+
+def test_production_startup_rejects_default_auth_secret(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "environment", "production")
+    with pytest.raises(RuntimeError, match="AUTH_SECRET"):
+        settings.validate_security_config()
+
+
+def test_oversized_upload_is_rejected() -> None:
+    oversized = b"\xff\xd8\xff" + (b"0" * (8 * 1024 * 1024 + 1024))
+    res = client.post(
+        "/api/v1/cash/infer",
+        files={"image": ("huge.jpg", oversized, "image/jpeg")},
+    )
+    assert res.status_code == 413
+
+
+def test_enrollment_is_user_isolated(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "allow_reference_enrollment", True)
+    headers_a = _register_headers("enroll_alice")
+    headers_b = _register_headers("enroll_bob")
+
+    png = _make_textured_png((115, 75, 155))
+    r = client.post(
+        "/api/v1/cash/enroll",
+        headers=headers_a,
+        data={"denomination_ngn": "1000"},
+        files={"image": ("1000.png", png, "image/png")},
+    )
+    assert r.status_code == 200
+
+    counts_a = client.get("/api/v1/cash/enrollments", headers=headers_a).json()["counts"]
+    counts_b = client.get("/api/v1/cash/enrollments", headers=headers_b).json()["counts"]
+    assert counts_a["1000"] == 1
+    assert counts_b["1000"] == 0

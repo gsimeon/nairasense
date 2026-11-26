@@ -11,6 +11,10 @@ from app.db import VALID_DENOMINATIONS
 from app.schemas.cash import CashInferenceResponse
 from app.settings import settings
 
+# Cap decoded image pixels to protect against decompression bombs (12 MP)
+_MAX_IMAGE_PIXELS = 12_000_000
+Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
+
 # Characteristic HSV hue centers (0..180 OpenCV-style scale mapped to 0..1) and saturation profiles
 # for Nigerian Naira denominations. Used as a zero-shot prior before user webcam enrollment.
 _NAIRA_PRIORS: dict[int, dict[str, float]] = {
@@ -25,7 +29,7 @@ _NAIRA_PRIORS: dict[int, dict[str, float]] = {
 }
 
 
-def _load_enrolled() -> dict[str, list[list[float]]]:
+def _load_enrolled() -> dict[str, dict[str, list[list[float]]]]:
     path = Path(settings.enrolled_prototypes_path)
     if not path.exists():
         return {}
@@ -36,23 +40,26 @@ def _load_enrolled() -> dict[str, list[list[float]]]:
         return {}
 
 
-def _save_enrolled(data: dict[str, list[list[float]]]) -> None:
+def _save_enrolled(data: dict[str, dict[str, list[list[float]]]]) -> None:
     path = Path(settings.enrolled_prototypes_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
-def get_enrollment_counts() -> dict[int, int]:
+def get_enrollment_counts(user_id: str) -> dict[int, int]:
     enrolled = _load_enrolled()
-    return {denom: len(enrolled.get(str(denom), [])) for denom in VALID_DENOMINATIONS}
+    user_samples = enrolled.get(user_id, {})
+    return {denom: len(user_samples.get(str(denom), [])) for denom in VALID_DENOMINATIONS}
 
 
 def extract_note_features(image_bytes: bytes) -> tuple[np.ndarray, dict[str, Any]]:
-    """Decode image pixels, assess quality, and extract a normalized HSV + spatial feature vector."""
+    """Decode image pixels safely, assess quality, and extract HSV + spatial features."""
     try:
         img = Image.open(io.BytesIO(image_bytes))
+        if (img.width * img.height) > _MAX_IMAGE_PIXELS:
+            raise ValueError("IMAGE_DIMENSIONS_TOO_LARGE")
         img = ImageOps.exif_transpose(img).convert("RGB")
-    except (UnidentifiedImageError, OSError) as exc:
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError) as exc:
         raise ValueError("INVALID_IMAGE_BYTES") from exc
 
     # Resize for consistent, fast CPU feature extraction
@@ -136,8 +143,8 @@ def extract_note_features(image_bytes: bytes) -> tuple[np.ndarray, dict[str, Any
     return feat, meta
 
 
-def enroll_note_sample(image_bytes: bytes, denomination_ngn: int) -> dict[str, Any]:
-    """Enroll a real Naira note image into the local offline reference bank."""
+def enroll_note_sample(image_bytes: bytes, denomination_ngn: int, user_id: str) -> dict[str, Any]:
+    """Enroll a Naira note image into a user-isolated offline reference bank."""
     if denomination_ngn not in VALID_DENOMINATIONS:
         raise ValueError("Invalid Naira denomination.")
     feat, meta = extract_note_features(image_bytes)
@@ -145,16 +152,17 @@ def enroll_note_sample(image_bytes: bytes, denomination_ngn: int) -> dict[str, A
         raise ValueError(f"Image rejected for enrollment: {', '.join(meta['warnings'])}")
 
     enrolled = _load_enrolled()
+    user_samples = enrolled.setdefault(user_id, {})
     key = str(denomination_ngn)
-    samples = enrolled.get(key, [])
+    samples = user_samples.get(key, [])
     samples.append([round(float(x), 6) for x in feat.tolist()])
-    # Keep up to 25 most recent samples per denomination
-    enrolled[key] = samples[-25:]
+    # Keep up to 25 most recent samples per denomination per user
+    user_samples[key] = samples[-25:]
     _save_enrolled(enrolled)
 
     return {
         "denomination_ngn": denomination_ngn,
-        "sample_count": len(enrolled[key]),
+        "sample_count": len(user_samples[key]),
         "quality": meta,
     }
 
@@ -170,7 +178,10 @@ def _prior_score(dom_hue: float, dom_sat: float, dom_val: float, denom: int) -> 
     return max(0.0, 1.0 - dist)
 
 
-def classify_banknote_offline(image_bytes: bytes) -> CashInferenceResponse:
+def classify_banknote_offline(
+    image_bytes: bytes,
+    user_id: str | None = None,
+) -> CashInferenceResponse:
     """100% offline pixel-based Naira denomination classifier using local HSV/spatial features."""
     try:
         feat, meta = extract_note_features(image_bytes)
@@ -192,7 +203,8 @@ def classify_banknote_offline(image_bytes: bytes) -> CashInferenceResponse:
             model={"name": "local-naira-cv", "version": "0.1.0-offline"},
         )
 
-    enrolled = _load_enrolled()
+    all_enrolled = _load_enrolled()
+    enrolled = all_enrolled.get(user_id, {}) if user_id else {}
     scores: dict[int, float] = {}
     has_enrolled = any(len(v) > 0 for v in enrolled.values())
 

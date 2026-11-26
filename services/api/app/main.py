@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,10 +10,18 @@ from app.routes.preferences import router as preferences_router
 from app.routes.transactions import router as transactions_router
 from app.settings import settings
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    settings.validate_security_config()
+    yield
+
+
 app = FastAPI(
     title="NairaSense API",
     version="0.1.0",
-    description="NairaSense API. Banknote inference is currently a mock implementation.",
+    description="NairaSense API. Banknote inference uses a local experimental baseline by default.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

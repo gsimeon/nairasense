@@ -1,8 +1,15 @@
+"""In-memory sliding-window rate limiter for local/single-instance use.
+
+For multi-instance production deployments, replace with a shared Redis-backed limiter
+and configure trusted proxy headers.
+"""
+
 import time
 from collections import defaultdict, deque
 
 from fastapi import HTTPException, Request, status
 
+_MAX_TRACKED_KEYS = 5000
 _REQUEST_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 
 
@@ -11,6 +18,14 @@ def make_rate_limiter(max_requests: int, window_seconds: int):
         client_ip = request.client.host if request.client else "unknown"
         key = f"{request.url.path}:{client_ip}"
         now = time.monotonic()
+
+        if len(_REQUEST_BUCKETS) > _MAX_TRACKED_KEYS:
+            stale_keys = [
+                k for k, q in _REQUEST_BUCKETS.items() if not q or (now - q[-1]) > window_seconds
+            ]
+            for k in stale_keys:
+                _REQUEST_BUCKETS.pop(k, None)
+
         bucket = _REQUEST_BUCKETS[key]
         while bucket and (now - bucket[0]) > window_seconds:
             bucket.popleft()

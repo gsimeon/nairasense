@@ -20,7 +20,8 @@ Accessible, voice-first financial information companion for blind and low-vision
 | TransactionSense | OCR-assisted extraction (`tesseract.js` + regex) with field-level user review |
 | MoneyVoice & accessibility controls | Web Speech synthesis, repeat/stop, chimes/haptics, text size, high contrast |
 | IndexedDB & Service Worker | Implemented for local records, preferences, and static asset caching |
-| Authentication & user isolation | **Not implemented** (`DEFAULT_USER_ID` shared locally; do not deploy multi-user) |
+| Authentication & user isolation | Implemented (`Argon2id` + `PyJWT` HS256); per-user ownership on sessions, transactions, and preferences |
+| Upload & inference hardening | `/cash/infer` is rate-limited anonymous triage with 8 MB bounded streaming reads, magic-byte checks, and 12 MP pixel caps |
 | PostgreSQL integration | Schema & Docker Compose drafted; runtime currently uses SQLite |
 | Screen-reader audit (TalkBack/NVDA/VoiceOver) | **Not yet performed** |
 
