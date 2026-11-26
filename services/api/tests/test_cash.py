@@ -44,9 +44,18 @@ def test_infer_local_offline_classifier_with_real_image() -> None:
     assert payload["decision"]["requires_user_confirmation"] is True
 
 
-def test_enroll_and_match_offline_note() -> None:
+def test_enroll_disabled_by_default_and_works_when_enabled(monkeypatch) -> None:
     naira_1000 = _make_textured_png((115, 75, 155))
     naira_200 = _make_textured_png((75, 155, 70))
+
+    blocked = client.post(
+        "/api/v1/cash/enroll",
+        data={"denomination_ngn": "1000"},
+        files={"image": ("1000.png", naira_1000, "image/png")},
+    )
+    assert blocked.status_code == 403
+
+    monkeypatch.setattr(settings, "allow_reference_enrollment", True)
 
     r1 = client.post(
         "/api/v1/cash/enroll",

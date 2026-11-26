@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LiveCameraScanner } from "@/components/LiveCameraScanner";
-import { enrollBanknoteSample, inferBanknoteImage } from "@/lib/api";
+import { inferBanknoteImage } from "@/lib/api";
 import { playCue } from "@/lib/audioCues";
 import { calculateNairaChange, formatChangeSpeech } from "@/lib/changeCalculator";
 import { formatAddedSpeech, formatDetectedNoteSpeech, formatTotalSpeech } from "@/lib/i18n";
@@ -49,7 +49,6 @@ export function CashSensePanel({
   onStopVoice,
 }: CashSensePanelProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [lastScannedFile, setLastScannedFile] = useState<File | null>(null);
   const [result, setResult] = useState<InferenceResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [showCorrector, setShowCorrector] = useState(false);
@@ -91,7 +90,6 @@ export function CashSensePanel({
         onAnnounce("Analyzing note image. Please wait.", true);
       }
       try {
-        setLastScannedFile(targetFile);
         const data = await inferBanknoteImage(targetFile);
         setResult(data);
         if (data.image_quality.accepted) {
@@ -136,18 +134,14 @@ export function CashSensePanel({
         confidence: result?.prediction.confidence ?? null,
         confirmation_status: status,
       });
-      if (lastScannedFile && result) {
-        enrollBanknoteSample(lastScannedFile, value).catch(() => {});
-      }
       setResult(null);
       setFile(null);
-      setLastScannedFile(null);
       setShowCorrector(false);
       playCue("confirm", cuesEnabled);
       const nextTotal = totalNgn + value;
       onAnnounce(formatAddedSpeech(voiceLanguage, value, nextTotal), true);
     },
-    [cuesEnabled, lastScannedFile, onAddEntry, onAnnounce, result, totalNgn, voiceLanguage],
+    [cuesEnabled, onAddEntry, onAnnounce, result, totalNgn, voiceLanguage],
   );
 
   const handleReject = useCallback(async () => {
@@ -160,7 +154,6 @@ export function CashSensePanel({
       });
     }
     setResult(null);
-    setLastScannedFile(null);
     setShowCorrector(false);
     playCue("warning", cuesEnabled);
     onAnnounce("Suggestion rejected. It was not added to your total.", true);
@@ -294,22 +287,18 @@ export function CashSensePanel({
 
       {result && result.image_quality.accepted && (
         <section className="panel result" aria-labelledby="result-title">
+          <p className="eyebrow">EXPERIMENTAL SUGGESTION · REQUIRES CONFIRMATION</p>
           <h2 id="result-title">2. Review the suggestion</h2>
           <p className="amount">₦{result.prediction.denomination_ngn.toLocaleString("en-NG")}</p>
           <p>
-            Confidence score: {(result.prediction.confidence * 100).toFixed(0)}% (
+            Baseline match score: {(result.prediction.confidence * 100).toFixed(0)}% (
             {result.decision.confidence_band})
           </p>
-          {result.model.version === "0.0.0-mock" ? (
-            <p className="prototype-warning">
-              Mock mode active. Switch VISION_PROVIDER to local for offline recognition.
-            </p>
-          ) : (
-            <p className="hint">
-              Identified offline by {result.model.name}. Confirming or correcting teaches your local
-              model.
-            </p>
-          )}
+          <p className="prototype-warning">
+            {result.model.version === "0.0.0-mock"
+              ? "Mock mode active. Do not rely on this suggestion for real cash."
+              : `Experimental baseline (${result.model.name} ${result.model.version}). Always verify and confirm before adding to your total.`}
+          </p>
           <div className="actions">
             <button
               type="button"

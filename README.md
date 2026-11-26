@@ -2,16 +2,27 @@
 
 Accessible, voice-first financial information companion for blind and low-vision Nigerians.
 
-> **Starter scaffold only.** This repository contains an initial application skeleton and mock inference implementation. It does not contain a trained Naira banknote model, production authentication, a deployed backend, a validated OCR engine, or verified accessibility/performance results.
+> **Prototype stage — not production-ready.** NairaSense implements live camera capture, an experimental offline pixel-based banknote classifier (`local-naira-cv`), browser-based receipt OCR (`tesseract.js`), spoken feedback (`MoneyVoice`), IndexedDB offline storage, and a FastAPI backend. It does **not** yet have a trained/validated Naira banknote vision model, multi-user authentication, PostgreSQL runtime persistence, or a formal screen-reader accessibility audit.
 
-## Confirmed architecture
+## Architecture (current vs. target)
 
-- Frontend: Next.js + TypeScript, responsive PWA
-- Backend: Python FastAPI
-- AI: hybrid strategy; backend inference first, on-device inference evaluated later
-- Database: PostgreSQL
-- Local records: IndexedDB planned; not implemented in this scaffold
-- First vertical slice: capture/upload one note → mock prediction → user confirmation/correction → deterministic total
+- **Frontend:** Next.js 14 + TypeScript PWA (`apps/web`), IndexedDB offline storage, Service Worker asset caching, Web Speech API (`MoneyVoice`), Web Audio chimes/haptics, optional Speech Recognition voice commands, and `tesseract.js` in-browser OCR.
+- **Backend:** Python FastAPI (`services/api`) with `Pillow` + `NumPy` offline feature-based banknote baseline (`local-naira-cv`), optional `gemini-2.5-flash` vision provider, deterministic transaction text extraction, and preferences API.
+- **Database:** Local SQLite (`nairasense_dev.db`) is used for local prototype persistence. A PostgreSQL Docker setup (`docker-compose.yml`) and initial SQL schema (`services/api/migrations/001_initial.sql`) exist for the target cloud deployment but are not yet wired into the FastAPI runtime.
+- **AI & Offline Reality:** Banknote inference runs on the FastAPI backend (`local-naira-cv` by default, no API key required). Browser assets, confirmed cash/transaction records, and receipt OCR work offline, while banknote inference requires connectivity to the FastAPI service.
+
+## Implementation status
+
+| Area | Current Status |
+|---|---|
+| CashSense live camera + photo capture | Implemented (with brightness/blur checks & user confirmation) |
+| Banknote recognition (`local-naira-cv`) | Experimental HSV/spatial color baseline; **not** a trained/validated vision model |
+| TransactionSense | OCR-assisted extraction (`tesseract.js` + regex) with field-level user review |
+| MoneyVoice & accessibility controls | Web Speech synthesis, repeat/stop, chimes/haptics, text size, high contrast |
+| IndexedDB & Service Worker | Implemented for local records, preferences, and static asset caching |
+| Authentication & user isolation | **Not implemented** (`DEFAULT_USER_ID` shared locally; do not deploy multi-user) |
+| PostgreSQL integration | Schema & Docker Compose drafted; runtime currently uses SQLite |
+| Screen-reader audit (TalkBack/NVDA/VoiceOver) | **Not yet performed** |
 
 ## Repository layout
 
@@ -80,21 +91,11 @@ npm run typecheck
 npm run build
 ```
 
-## Validation performed for this scaffold\n\n- FastAPI test suite: 3 passed in the generation environment.\n- Python syntax compilation: passed.\n- ZIP archive integrity: passed.\n- Frontend install/build, database migrations, deployment and accessibility testing: not run.\n\n## Important implementation status
+## Validation & important limitations
 
-| Area | Status |
-|---|---|
-| Next.js application shell | Starter scaffold |
-| CashSense upload/result/confirmation flow | Starter UI with mock inference |
-| FastAPI health and cash inference route | Starter API; inference is mock |
-| PostgreSQL schema | Initial migration draft; not applied |
-| Authentication/authorisation | Not implemented |
-| TransactionSense OCR | Not implemented |
-| MoneyVoice spoken output | Not implemented |
-| IndexedDB/offline records | Not implemented |
-| Trained Naira model | Not available |
-| Screen-reader user testing | Not performed |
-| Deployment | Not performed |
+- **Backend:** `ruff check app tests` and `pytest` (11 tests covering health, cash sessions, local baseline classifier, opt-in enrollment guard, transaction extraction/CRUD, and preferences).
+- **Frontend:** `npm run typecheck`, `npm run lint`, and `npm run build`.
+- **Important:** API tests use synthetic textured PNGs, not genuine Naira banknote photographs. Do not treat baseline match scores as calibrated accuracy.
 
 ## Safety and privacy
 

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _row_to_response(row) -> TransactionResponse:

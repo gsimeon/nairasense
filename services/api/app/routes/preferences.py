@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 
@@ -9,7 +9,7 @@ router = APIRouter(prefix="/preferences", tags=["preferences"])
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @router.get("", response_model=UserPreferencesResponse)

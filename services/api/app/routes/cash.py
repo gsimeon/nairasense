@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -13,12 +14,13 @@ from app.schemas.cash import (
 )
 from app.services.banknote_classifier import classify_banknote
 from app.services.local_vision import enroll_note_sample, get_enrollment_counts
+from app.settings import settings
 
 router = APIRouter(prefix="/cash", tags=["cash"])
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _load_session(session_id: str) -> CashSessionResponse:
@@ -70,7 +72,9 @@ def _load_session(session_id: str) -> CashSessionResponse:
 
 
 @router.post("/infer", response_model=CashInferenceResponse)
-async def infer_banknote(image: UploadFile = File(...)) -> CashInferenceResponse:
+async def infer_banknote(
+    image: Annotated[UploadFile, File(...)],
+) -> CashInferenceResponse:
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
     if image.content_type not in allowed_types:
         raise HTTPException(status_code=415, detail="Upload a JPEG, PNG or WebP image.")
@@ -91,9 +95,14 @@ def list_enrollments() -> dict[str, object]:
 
 @router.post("/enroll")
 async def enroll_banknote(
-    denomination_ngn: int = Form(...),
-    image: UploadFile = File(...),
+    denomination_ngn: Annotated[int, Form(...)],
+    image: Annotated[UploadFile, File(...)],
 ) -> dict[str, object]:
+    if not settings.allow_reference_enrollment:
+        raise HTTPException(
+            status_code=403,
+            detail="Automatic banknote enrollment is disabled. Enable opt-in dataset collection explicitly.",
+        )
     if denomination_ngn not in VALID_DENOMINATIONS:
         raise HTTPException(status_code=422, detail="Invalid Naira denomination.")
     allowed_types = {"image/jpeg", "image/png", "image/webp"}

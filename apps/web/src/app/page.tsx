@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CashSensePanel } from "@/components/CashSensePanel";
 import { PreferencesPanel } from "@/components/PreferencesPanel";
@@ -39,9 +39,31 @@ import {
 } from "@/lib/types";
 
 type ActiveTab = "cash" | "transactions" | "settings";
+const TAB_ORDER: ActiveTab[] = ["cash", "transactions", "settings"];
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("cash");
+  const tabRefs = useRef<Record<ActiveTab, HTMLButtonElement | null>>({
+    cash: null,
+    transactions: null,
+    settings: null,
+  });
+
+  function handleTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, current: ActiveTab) {
+    const idx = TAB_ORDER.indexOf(current);
+    let nextIdx: number | null = null;
+    if (event.key === "ArrowRight") nextIdx = (idx + 1) % TAB_ORDER.length;
+    else if (event.key === "ArrowLeft") nextIdx = (idx - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+    else if (event.key === "Home") nextIdx = 0;
+    else if (event.key === "End") nextIdx = TAB_ORDER.length - 1;
+
+    if (nextIdx !== null) {
+      event.preventDefault();
+      const nextTab = TAB_ORDER[nextIdx];
+      setActiveTab(nextTab);
+      tabRefs.current[nextTab]?.focus();
+    }
+  }
   const [preferences, setPreferences] = useState<AccessibilityPreferences>(DEFAULT_PREFERENCES);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [cashEntries, setCashEntries] = useState<CashEntry[]>([]);
@@ -276,34 +298,43 @@ export default function HomePage() {
         <nav className="tabs" role="tablist" aria-label="NairaSense sections">
           <button
             id="tab-cash"
+            ref={(el) => { tabRefs.current.cash = el; }}
             type="button"
             role="tab"
+            tabIndex={activeTab === "cash" ? 0 : -1}
             aria-selected={activeTab === "cash"}
             aria-controls="panel-cash"
             className={activeTab === "cash" ? "tab active" : "tab"}
             onClick={() => setActiveTab("cash")}
+            onKeyDown={(e) => handleTabKeyDown(e, "cash")}
           >
             CashSense
           </button>
           <button
             id="tab-transactions"
+            ref={(el) => { tabRefs.current.transactions = el; }}
             type="button"
             role="tab"
+            tabIndex={activeTab === "transactions" ? 0 : -1}
             aria-selected={activeTab === "transactions"}
             aria-controls="panel-transactions"
             className={activeTab === "transactions" ? "tab active" : "tab"}
             onClick={() => setActiveTab("transactions")}
+            onKeyDown={(e) => handleTabKeyDown(e, "transactions")}
           >
             TransactionSense
           </button>
           <button
             id="tab-settings"
+            ref={(el) => { tabRefs.current.settings = el; }}
             type="button"
             role="tab"
+            tabIndex={activeTab === "settings" ? 0 : -1}
             aria-selected={activeTab === "settings"}
             aria-controls="panel-settings"
             className={activeTab === "settings" ? "tab active" : "tab"}
             onClick={() => setActiveTab("settings")}
+            onKeyDown={(e) => handleTabKeyDown(e, "settings")}
           >
             Voice &amp; Display
           </button>

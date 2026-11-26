@@ -157,11 +157,12 @@ export function TransactionSensePanel({
   return (
     <div id="panel-transactions" role="tabpanel" aria-labelledby="tab-transactions">
       <section className="intro" aria-labelledby="tx-page-title">
-        <p className="eyebrow">TRANSACTION SENSE · OFFLINE OCR</p>
+        <p className="eyebrow">TRANSACTION SENSE · OCR-ASSISTED EXTRACTION</p>
         <h1 id="tx-page-title">Review receipts &amp; alerts clearly.</h1>
         <p>
-          Snap a POS receipt or transfer screenshot, or paste an SMS alert to extract key fields for
-          your own review and spoken summary.
+          OCR-assisted transaction information extraction with user confirmation. Snap a POS
+          receipt or transfer screenshot, or paste an SMS alert to extract candidate fields for your
+          review.
         </p>
       </section>
 
