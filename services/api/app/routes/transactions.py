@@ -1,0 +1,145 @@
+import json
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from fastapi import APIRouter, HTTPException
+
+from app.db import DEFAULT_USER_ID, get_conn, parse_json_dict
+from app.schemas.transactions import (
+    TransactionCreate,
+    TransactionExtractRequest,
+    TransactionExtractResponse,
+    TransactionResponse,
+    TransactionUpdate,
+)
+from app.services.transaction_parser import extract_transaction_fields
+
+router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _row_to_response(row) -> TransactionResponse:
+    return TransactionResponse(
+        id=row["id"],
+        amount_kobo=row["amount_kobo"],
+        currency=row["currency"],
+        transaction_date=row["transaction_date"],
+        reference=row["reference"],
+        sender_label=row["sender_label"],
+        recipient_label=row["recipient_label"],
+        reported_status=row["reported_status"],
+        source_type=row["source_type"],
+        extracted_fields=parse_json_dict(row["extracted_fields"]),
+        user_confirmed=bool(row["user_confirmed"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+@router.post("/extract", response_model=TransactionExtractResponse)
+def extract_transaction(payload: TransactionExtractRequest) -> TransactionExtractResponse:
+    parsed = extract_transaction_fields(payload.raw_text)
+    return TransactionExtractResponse(
+        amount_kobo=parsed["amount_kobo"],
+        currency="NGN",
+        transaction_date=parsed["transaction_date"],
+        reference=parsed["reference"],
+        sender_label=parsed["sender_label"],
+        recipient_label=parsed["recipient_label"],
+        reported_status=parsed["reported_status"],
+        source_type=payload.source_type,
+        extracted_fields=parsed["extracted_fields"],
+        requires_user_confirmation=True,
+    )
+
+
+@router.post("", response_model=TransactionResponse, status_code=201)
+def create_transaction(payload: TransactionCreate) -> TransactionResponse:
+    tx_id = str(uuid4())
+    now = _now_iso()
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO transaction_records (
+                id, user_id, amount_kobo, currency, transaction_date, reference,
+                sender_label, recipient_label, reported_status, source_type,
+                extracted_fields, user_confirmed, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                tx_id,
+                DEFAULT_USER_ID,
+                payload.amount_kobo,
+                payload.currency,
+                payload.transaction_date,
+                payload.reference,
+                payload.sender_label,
+                payload.recipient_label,
+                payload.reported_status,
+                payload.source_type,
+                json.dumps(payload.extracted_fields),
+                1 if payload.user_confirmed else 0,
+                now,
+                now,
+            ),
+        )
+        row = conn.execute(
+            "SELECT * FROM transaction_records WHERE id = ? AND user_id = ?",
+            (tx_id, DEFAULT_USER_ID),
+        ).fetchone()
+    return _row_to_response(row)
+
+
+@router.get("", response_model=list[TransactionResponse])
+def list_transactions() -> list[TransactionResponse]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM transaction_records WHERE user_id = ? ORDER BY created_at DESC",
+            (DEFAULT_USER_ID,),
+        ).fetchall()
+    return [_row_to_response(row) for row in rows]
+
+
+@router.patch("/{tx_id}", response_model=TransactionResponse)
+def update_transaction(tx_id: str, payload: TransactionUpdate) -> TransactionResponse:
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields provided for update.")
+
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT * FROM transaction_records WHERE id = ? AND user_id = ?",
+            (tx_id, DEFAULT_USER_ID),
+        ).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Transaction record not found.")
+
+        if "user_confirmed" in updates:
+            updates["user_confirmed"] = 1 if updates["user_confirmed"] else 0
+        updates["updated_at"] = _now_iso()
+
+        assignments = ", ".join(f"{col} = ?" for col in updates)
+        values = list(updates.values()) + [tx_id, DEFAULT_USER_ID]
+        conn.execute(
+            f"UPDATE transaction_records SET {assignments} WHERE id = ? AND user_id = ?",
+            values,
+        )
+        row = conn.execute(
+            "SELECT * FROM transaction_records WHERE id = ? AND user_id = ?",
+            (tx_id, DEFAULT_USER_ID),
+        ).fetchone()
+    return _row_to_response(row)
+
+
+@router.delete("/{tx_id}", status_code=204)
+def delete_transaction(tx_id: str) -> None:
+    with get_conn() as conn:
+        cursor = conn.execute(
+            "DELETE FROM transaction_records WHERE id = ? AND user_id = ?",
+            (tx_id, DEFAULT_USER_ID),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Transaction record not found.")

@@ -1,0 +1,21 @@
+{
+  "product": "NairaSense",
+  "version": "0.1.0-scaffold",
+  "status": "starter scaffold; not production ready",
+  "verified_in_this_generation": [
+    "35 starter files written",
+    "zip archive integrity check passed",
+    "Python compileall passed",
+    "FastAPI pytest suite: 3 passed"
+  ],
+  "not_verified": [
+    "frontend dependency installation",
+    "frontend typecheck or production build",
+    "GitHub Actions execution",
+    "database migration application",
+    "deployment",
+    "screen reader accessibility",
+    "AI model accuracy",
+    "real banknote image analysis"
+  ]
+}

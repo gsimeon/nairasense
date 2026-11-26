@@ -1,0 +1,10 @@
+{
+  "name": "NairaSense",
+  "short_name": "NairaSense",
+  "description": "Accessible financial information companion",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7fbff",
+  "theme_color": "#174a79",
+  "icons": []
+}
