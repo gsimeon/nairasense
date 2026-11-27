@@ -130,9 +130,13 @@ def _validate_transaction_state(
             )
         fields["amount_entry_mode"] = "candidate_selected"
     elif amount_kobo is not None:
+        fields["selected_candidate_context"] = None
         fields["amount_entry_mode"] = "manual"
     else:
+        fields["selected_candidate_context"] = None
         fields["amount_entry_mode"] = "unknown"
+    if user_confirmed:
+        fields["last_confirmed_at"] = _now_iso()
     return fields
 
 

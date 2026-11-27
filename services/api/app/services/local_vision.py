@@ -144,7 +144,7 @@ def extract_note_features(image_bytes: bytes) -> tuple[np.ndarray, dict[str, Any
 
 
 def enroll_note_sample(image_bytes: bytes, denomination_ngn: int, user_id: str) -> dict[str, Any]:
-    """Enroll a Naira note image into a user-isolated offline reference bank."""
+    """Enroll a Naira note image into a user-isolated backend reference bank."""
     if denomination_ngn not in VALID_DENOMINATIONS:
         raise ValueError("Invalid Naira denomination.")
     feat, meta = extract_note_features(image_bytes)
@@ -182,7 +182,7 @@ def classify_banknote_offline(
     image_bytes: bytes,
     user_id: str | None = None,
 ) -> CashInferenceResponse:
-    """100% offline pixel-based Naira denomination classifier using local HSV/spatial features."""
+    """Backend CPU pixel-based Naira classifier using HSV/spatial features (no external API call; browser still calls FastAPI)."""
     try:
         feat, meta = extract_note_features(image_bytes)
     except ValueError:

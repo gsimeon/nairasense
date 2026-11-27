@@ -446,18 +446,34 @@ def test_transaction_partial_updates() -> None:
     assert restore_amb_res.status_code == 422
 
     # 3c. Clear selected candidate via extracted_fields -> amount_entry_mode becomes manual
+    # and orphaned selected_candidate_context is cleared
     clear_cand_res = client.patch(
         f"/api/v1/transactions/{tx_id}",
         headers=headers,
         json={
             "extracted_fields": {
                 "selected_candidate_id": None,
-                "selected_candidate_context": None,
+                "selected_candidate_context": "Fee",
             }
         },
     )
     assert clear_cand_res.status_code == 200
     assert clear_cand_res.json()["extracted_fields"]["amount_entry_mode"] == "manual"
+    assert clear_cand_res.json()["extracted_fields"]["selected_candidate_context"] is None
+    assert clear_cand_res.json()["extracted_fields"]["last_confirmed_at"] is not None
+
+    # 3d. Cross-user PATCH attempt is rejected (404)
+    other_reg = client.post(
+        "/api/v1/auth/register",
+        json={"username": "partial_upd_intruder", "password": "password123"},
+    )
+    other_headers = {"Authorization": f"Bearer {other_reg.json()['access_token']}"}
+    intruder_patch = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=other_headers,
+        json={"amount_kobo": 100},
+    )
+    assert intruder_patch.status_code == 404
 
     # 4. Change previously confirmed record back to unconfirmed (even with an ambiguous date)
     unconfirm_res = client.patch(
