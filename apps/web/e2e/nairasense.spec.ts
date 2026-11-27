@@ -277,6 +277,18 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     await page.getByRole("button", { name: "Extract fields for review" }).click();
     await expect(page.getByLabel("Transaction direction")).toHaveValue("Debit");
     await expect(page.getByLabel("Reported outcome")).toHaveValue("Successful");
+
+    // Negation handling offline & online
+    const negatedText = "Debit of NGN 5,000.00 was not successful.";
+    await page.getByLabel("Alert or receipt text").fill(negatedText);
+    await page.getByRole("button", { name: "Extract fields for review" }).click();
+    await expect(page.getByLabel("Transaction direction")).toHaveValue("Debit");
+    await expect(page.getByLabel("Reported outcome")).toHaveValue("Failed");
+
     await context.setOffline(false);
+    await page.getByLabel("Alert or receipt text").fill(negatedText);
+    await page.getByRole("button", { name: "Extract fields for review" }).click();
+    await expect(page.getByLabel("Transaction direction")).toHaveValue("Debit");
+    await expect(page.getByLabel("Reported outcome")).toHaveValue("Failed");
   });
 });

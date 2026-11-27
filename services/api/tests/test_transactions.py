@@ -70,6 +70,10 @@ def test_direction_does_not_override_outcome() -> None:
         ("Failed debit of NGN 2,500.", "Debit", "Failed"),
         ("Debit of NGN 3,000 was reversed.", "Debit", "Reversed"),
         ("Debit NGN 1,000 successful, later reversed.", "Debit", "Ambiguous (Review Required)"),
+        ("Transaction was not successful. NGN 5,000.", None, "Failed"),
+        ("Debit of NGN 2,000 was unsuccessful.", "Debit", "Failed"),
+        ("Reversal request pending for NGN 3,500.", None, "Ambiguous (Review Required)"),
+        ("Debit NGN 4,000 successful, but refund pending.", "Debit", "Ambiguous (Review Required)"),
     ]
     for raw_text, expected_direction, expected_outcome in cases:
         res = client.post(
@@ -113,11 +117,12 @@ def test_transaction_crud_lifecycle() -> None:
     patch_res = client.patch(
         f"/api/v1/transactions/{tx_id}",
         headers=headers,
-        json={"reported_status": "Verified by user", "amount_kobo": 550000},
+        json={"reported_status": "Reversed", "amount_kobo": 550000, "user_confirmed": True},
     )
     assert patch_res.status_code == 200
     assert patch_res.json()["amount_kobo"] == 550000
-    assert patch_res.json()["reported_status"] == "Verified by user"
+    assert patch_res.json()["reported_status"] == "Reversed"
+    assert patch_res.json()["user_confirmed"] is True
 
     del_res = client.delete(f"/api/v1/transactions/{tx_id}", headers=headers)
     assert del_res.status_code == 204

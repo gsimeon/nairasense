@@ -79,9 +79,13 @@ function parseLocallyOffline(rawText: string, sourceType: SourceType) {
   const transactionDirection =
     matchedDirections.length > 1 ? "Ambiguous" : matchedDirections[0] ?? null;
 
+  const outcomeText = rawText.replace(
+    /\b(?:not\s+(?:successful|success|approved)|unsuccessful)\b/gi,
+    " failed ",
+  );
   const outcomeStatuses: string[] = [];
   for (const [pattern, label] of OFFLINE_OUTCOME_RULES) {
-    if (pattern.test(rawText) && !outcomeStatuses.includes(label)) {
+    if (pattern.test(outcomeText) && !outcomeStatuses.includes(label)) {
       outcomeStatuses.push(label);
     }
   }
@@ -396,7 +400,6 @@ export function TransactionSensePanel({
                 <option value="Failed">Failed</option>
                 <option value="Reversed">Reversed</option>
                 <option value="Ambiguous (Review Required)">Ambiguous (Review Required)</option>
-                <option value="Verified by user">Verified by user</option>
               </select>
             </div>
             <div className="field">
@@ -463,6 +466,7 @@ export function TransactionSensePanel({
                       ? `${rec.extracted_fields.transaction_direction} · `
                       : ""}
                     {rec.reported_status ? `${rec.reported_status} · ` : ""}
+                    {rec.user_confirmed ? "Confirmed by user · " : "Needs review · "}
                     {rec.sender_label ? `From ${rec.sender_label} · ` : ""}
                     {rec.recipient_label ? `To ${rec.recipient_label} · ` : ""}
                     {rec.reference ? `Ref ${rec.reference}` : rec.source_type}

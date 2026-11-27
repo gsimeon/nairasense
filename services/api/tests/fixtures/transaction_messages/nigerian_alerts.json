@@ -178,5 +178,41 @@
       "reference": "GTB-77182",
       "multiple_amounts_detected": false
     }
+  },
+  {
+    "name": "negated_not_successful_transaction",
+    "source_type": "notification",
+    "raw_text": "Debit of NGN 5,000.00 was not successful. Ref: NEG-101.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Failed",
+      "transaction_direction": "Debit",
+      "reference": "NEG-101",
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "reversal_request_pending",
+    "source_type": "notification",
+    "raw_text": "Reversal request pending for NGN 3,500.00. Ref: RVP-204.",
+    "expected": {
+      "amount_kobo": 350000,
+      "reported_status": "Ambiguous (Review Required)",
+      "transaction_direction": null,
+      "reference": "RVP-204",
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "debit_successful_refund_pending",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 4,000.00 successful, but refund pending. Ref: DRP-505.",
+    "expected": {
+      "amount_kobo": 400000,
+      "reported_status": "Ambiguous (Review Required)",
+      "transaction_direction": "Debit",
+      "reference": "DRP-505",
+      "multiple_amounts_detected": false
+    }
   }
 ]

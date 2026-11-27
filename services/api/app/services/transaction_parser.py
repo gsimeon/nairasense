@@ -81,6 +81,11 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     else:
         transaction_direction = matched_directions[0] if matched_directions else None
 
+    outcome_text = re.sub(
+        r"\b(?:not\s+(?:successful|success|approved)|unsuccessful)\b",
+        " failed ",
+        lowered,
+    )
     outcome_statuses: list[str] = []
     for keyword, label in (
         ("reversed", "Reversed"),
@@ -92,7 +97,7 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
         ("success", "Successful"),
         ("approved", "Successful"),
     ):
-        if re.search(rf"\b{keyword}\b", lowered) and label not in outcome_statuses:
+        if re.search(rf"\b{keyword}\b", outcome_text) and label not in outcome_statuses:
             outcome_statuses.append(label)
 
     ambiguous_status = len(outcome_statuses) > 1
