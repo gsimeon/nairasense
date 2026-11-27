@@ -37,16 +37,19 @@ function parseNairaStringToKobo(raw: string): number | null {
   return Number.isSafeInteger(kobo) ? kobo : null;
 }
 
-const OFFLINE_STATUS_RULES: Array<[RegExp, string]> = [
+const OFFLINE_DIRECTION_RULES: Array<[RegExp, string]> = [
+  [/\bcredit\b/i, "Credit"],
+  [/\bcredited\b/i, "Credit"],
+  [/\bdebit\b/i, "Debit"],
+  [/\bdebited\b/i, "Debit"],
+];
+
+const OFFLINE_OUTCOME_RULES: Array<[RegExp, string]> = [
   [/\breversed\b/i, "Reversed"],
   [/\breversal\b/i, "Reversed"],
   [/\bfailed\b/i, "Failed"],
   [/\bdeclined\b/i, "Failed"],
   [/\bpending\b/i, "Pending"],
-  [/\bcredit\b/i, "Credit"],
-  [/\bcredited\b/i, "Credit"],
-  [/\bdebit\b/i, "Debit"],
-  [/\bdebited\b/i, "Debit"],
   [/\bsuccessful\b/i, "Successful"],
   [/\bsuccess\b/i, "Successful"],
   [/\bapproved\b/i, "Successful"],
@@ -66,19 +69,26 @@ function parseLocallyOffline(rawText: string, sourceType: SourceType) {
   const refMatch = rawText.match(
     /(?:ref(?:erence)?|txn\s*id|session\s*id|trans(?:action)?\s*id)\s*[:#-]?\s*([A-Za-z0-9_-]{4,64})/i,
   );
-  const matchedStatuses: string[] = [];
-  for (const [pattern, label] of OFFLINE_STATUS_RULES) {
-    if (pattern.test(rawText) && !matchedStatuses.includes(label)) {
-      matchedStatuses.push(label);
+
+  const matchedDirections: string[] = [];
+  for (const [pattern, label] of OFFLINE_DIRECTION_RULES) {
+    if (pattern.test(rawText) && !matchedDirections.includes(label)) {
+      matchedDirections.push(label);
     }
   }
-  const outcomeStatuses = matchedStatuses.filter((s) =>
-    ["Reversed", "Failed", "Pending", "Successful"].includes(s),
-  );
+  const transactionDirection =
+    matchedDirections.length > 1 ? "Ambiguous" : matchedDirections[0] ?? null;
+
+  const outcomeStatuses: string[] = [];
+  for (const [pattern, label] of OFFLINE_OUTCOME_RULES) {
+    if (pattern.test(rawText) && !outcomeStatuses.includes(label)) {
+      outcomeStatuses.push(label);
+    }
+  }
   const ambiguousStatus = outcomeStatuses.length > 1;
   const reportedStatus = ambiguousStatus
     ? "Ambiguous (Review Required)"
-    : matchedStatuses[0] ?? null;
+    : outcomeStatuses[0] ?? null;
 
   return {
     amount_kobo: amountKobo,
@@ -92,8 +102,9 @@ function parseLocallyOffline(rawText: string, sourceType: SourceType) {
       parser: "offline-regex-v2",
       multiple_amounts_detected: candidates.length > 1,
       candidate_amounts_ngn: candidates,
+      transaction_direction: transactionDirection,
       ambiguous_status_detected: ambiguousStatus,
-      candidate_statuses: matchedStatuses,
+      candidate_statuses: outcomeStatuses,
     },
     disclaimer:
       "Extracted offline from text. This is not independent bank settlement verification.",
@@ -120,6 +131,7 @@ export function TransactionSensePanel({
   const [sender, setSender] = useState("");
   const [recipient, setRecipient] = useState("");
   const [reference, setReference] = useState("");
+  const [transactionDirection, setTransactionDirection] = useState("");
   const [reportedStatus, setReportedStatus] = useState("");
   const [txDate, setTxDate] = useState("");
   const [disclaimer, setDisclaimer] = useState("");
@@ -153,6 +165,9 @@ export function TransactionSensePanel({
       setSender(extracted.sender_label ?? "");
       setRecipient(extracted.recipient_label ?? "");
       setReference(extracted.reference ?? "");
+      setTransactionDirection(
+        typeof fields.transaction_direction === "string" ? fields.transaction_direction : "",
+      );
       setReportedStatus(extracted.reported_status ?? "");
       setTxDate(extracted.transaction_date ?? "");
       setDisclaimer(extracted.disclaimer);
@@ -225,6 +240,7 @@ export function TransactionSensePanel({
       source_type: sourceType,
       extracted_fields: {
         ...rawExtractedFields,
+        transaction_direction: transactionDirection.trim() || null,
         reviewed_in_ui: true,
         suggested_amount_kobo: suggestedAmountKobo,
         confirmed_amount_kobo: amountKobo,
@@ -355,10 +371,21 @@ export function TransactionSensePanel({
               />
             </div>
             <div className="field">
-              <label htmlFor="tx-status">Reported status</label>
+              <label htmlFor="tx-direction">Transaction direction</label>
+              <input
+                id="tx-direction"
+                type="text"
+                placeholder="Debit or Credit"
+                value={transactionDirection}
+                onChange={(e) => setTransactionDirection(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="tx-status">Reported outcome</label>
               <input
                 id="tx-status"
                 type="text"
+                placeholder="Successful, Pending, Failed, or Reversed"
                 value={reportedStatus}
                 onChange={(e) => setReportedStatus(e.target.value)}
               />

@@ -25,7 +25,8 @@ def test_extract_transaction_parses_naira_alert() -> None:
     assert data["reference"] == "TXN-994812"
     assert data["sender_label"] == "ADAOBI OKAFOR"
     assert data["recipient_label"] == "CHIDI ENTERPRISE"
-    assert data["reported_status"] == "Credit"
+    assert data["reported_status"] == "Successful"
+    assert data["extracted_fields"]["transaction_direction"] == "Credit"
     assert data["transaction_date"] == "2026-11-26 14:22:00"
     assert data["requires_user_confirmation"] is True
 
@@ -57,8 +58,28 @@ def test_nigerian_bank_message_fixtures() -> None:
         expected = case["expected"]
         assert data["amount_kobo"] == expected["amount_kobo"], case["name"]
         assert data["reported_status"] == expected["reported_status"], case["name"]
+        assert data["extracted_fields"]["transaction_direction"] == expected["transaction_direction"], case["name"]
         assert data["reference"] == expected["reference"], case["name"]
         assert data["extracted_fields"]["multiple_amounts_detected"] is expected["multiple_amounts_detected"], case["name"]
+
+
+def test_direction_does_not_override_outcome() -> None:
+    cases = [
+        ("Your account has been debited NGN 5,000. Transaction successful.", "Debit", "Successful"),
+        ("Your account has been credited NGN 10,000. Transaction successful.", "Credit", "Successful"),
+        ("Failed debit of NGN 2,500.", "Debit", "Failed"),
+        ("Debit of NGN 3,000 was reversed.", "Debit", "Reversed"),
+        ("Debit NGN 1,000 successful, later reversed.", "Debit", "Ambiguous (Review Required)"),
+    ]
+    for raw_text, expected_direction, expected_outcome in cases:
+        res = client.post(
+            "/api/v1/transactions/extract",
+            json={"raw_text": raw_text, "source_type": "notification"},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["extracted_fields"]["transaction_direction"] == expected_direction, raw_text
+        assert body["reported_status"] == expected_outcome, raw_text
 
 
 def test_transaction_crud_lifecycle() -> None:

@@ -65,31 +65,41 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     transaction_date = date_match.group(1) if date_match else None
 
     lowered = raw_text.lower()
-    matched_statuses: list[str] = []
+
+    matched_directions: list[str] = []
+    for keyword, label in (
+        ("credit", "Credit"),
+        ("credited", "Credit"),
+        ("debit", "Debit"),
+        ("debited", "Debit"),
+    ):
+        if re.search(rf"\b{keyword}\b", lowered) and label not in matched_directions:
+            matched_directions.append(label)
+
+    if len(matched_directions) > 1:
+        transaction_direction: str | None = "Ambiguous"
+    else:
+        transaction_direction = matched_directions[0] if matched_directions else None
+
+    outcome_statuses: list[str] = []
     for keyword, label in (
         ("reversed", "Reversed"),
         ("reversal", "Reversed"),
         ("failed", "Failed"),
         ("declined", "Failed"),
         ("pending", "Pending"),
-        ("credit", "Credit"),
-        ("credited", "Credit"),
-        ("debit", "Debit"),
-        ("debited", "Debit"),
         ("successful", "Successful"),
         ("success", "Successful"),
         ("approved", "Successful"),
     ):
-        if re.search(rf"\b{keyword}\b", lowered) and label not in matched_statuses:
-            matched_statuses.append(label)
+        if re.search(rf"\b{keyword}\b", lowered) and label not in outcome_statuses:
+            outcome_statuses.append(label)
 
-    # Flag contradictory outcome statuses (e.g. "Successful" alongside "Reversed"/"Failed"/"Pending")
-    outcome_statuses = [s for s in matched_statuses if s in ("Reversed", "Failed", "Pending", "Successful")]
     ambiguous_status = len(outcome_statuses) > 1
     if ambiguous_status:
         reported_status = "Ambiguous (Review Required)"
     else:
-        reported_status = matched_statuses[0] if matched_statuses else None
+        reported_status = outcome_statuses[0] if outcome_statuses else None
 
     return {
         "amount_kobo": amount_kobo,
@@ -103,7 +113,8 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
             "matched_amount_token": amount_match.group(0) if amount_match else None,
             "multiple_amounts_detected": len(candidate_amounts_ngn) > 1,
             "candidate_amounts_ngn": candidate_amounts_ngn,
+            "transaction_direction": transaction_direction,
             "ambiguous_status_detected": ambiguous_status,
-            "candidate_statuses": matched_statuses,
+            "candidate_statuses": outcome_statuses,
         },
     }

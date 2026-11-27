@@ -221,11 +221,16 @@ test.describe("NairaSense Core & Reliability E2E", () => {
       await route.continue();
     });
 
+    const deleteCompleted = page.waitForResponse(
+      (res) => res.url().includes("/api/v1/cash/entries/") && res.request().method() === "DELETE",
+    );
     await page.getByRole("button", { name: "Remove Note 1, 500 Naira" }).click();
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page.locator(".total-amount")).toHaveText("₦0");
+    const delRes = await deleteCompleted;
+    expect(delRes.status()).toBe(204);
 
-    // Sign in as User B and add ₦200; delayed delete must not affect User B
+    // Sign in as User B and add ₦200; User A's delayed delete must not affect User B
     await page.getByRole("button", { name: "Sign in / Sync" }).click();
     await page.getByRole("button", { name: "Create account" }).first().click();
     await page.getByLabel("Username").fill(userB);
@@ -234,7 +239,44 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     await expect(page.getByText(`Signed in: ${userB}`)).toBeVisible();
 
     await page.getByRole("button", { name: "+ ₦200" }).click();
-    await page.waitForTimeout(500);
+    await expect(page.getByText("Your record has synchronised", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.locator(".total-amount")).toHaveText("₦200");
+
+    // Sign back in as User A and reload -> deletion remains persisted on server
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.getByRole("button", { name: "Sign in / Sync" }).click();
+    await page.locator("form.auth-form").getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByLabel("Username").fill(userA);
+    await page.getByLabel("Password (8+ characters)").fill("password123");
+    await page.locator("form.auth-form button[type='submit']").click();
+    await expect(page.getByText(`Signed in: ${userA}`)).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(`Signed in: ${userA}`)).toBeVisible();
+    await expect(page.locator(".total-amount")).toHaveText("₦0");
+  });
+
+  test("Online and offline transaction parsers separate direction from outcome", async ({
+    page,
+    context,
+  }) => {
+    const alertText = "Your account has been debited NGN 5,000. Transaction successful.";
+    await page.goto("/");
+    await page.getByRole("tab", { name: "TransactionSense" }).click();
+
+    // Online extraction via backend
+    await page.getByLabel("Alert or receipt text").fill(alertText);
+    await page.getByRole("button", { name: "Extract fields for review" }).click();
+    await expect(page.getByLabel("Transaction direction")).toHaveValue("Debit");
+    await expect(page.getByLabel("Reported outcome")).toHaveValue("Successful");
+
+    // Offline fallback extraction
+    await context.setOffline(true);
+    await page.getByLabel("Alert or receipt text").fill(alertText);
+    await page.getByRole("button", { name: "Extract fields for review" }).click();
+    await expect(page.getByLabel("Transaction direction")).toHaveValue("Debit");
+    await expect(page.getByLabel("Reported outcome")).toHaveValue("Successful");
+    await context.setOffline(false);
   });
 });
