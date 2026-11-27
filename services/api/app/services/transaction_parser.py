@@ -67,15 +67,18 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     lowered = raw_text.lower()
     reported_status: str | None = None
     for keyword, label in (
+        ("reversed", "Reversed"),
+        ("reversal", "Reversed"),
+        ("failed", "Failed"),
+        ("declined", "Failed"),
+        ("pending", "Pending"),
         ("credit", "Credit"),
         ("credited", "Credit"),
         ("debit", "Debit"),
         ("debited", "Debit"),
         ("successful", "Successful"),
         ("success", "Successful"),
-        ("pending", "Pending"),
-        ("failed", "Failed"),
-        ("reversed", "Reversed"),
+        ("approved", "Successful"),
     ):
         if re.search(rf"\b{keyword}\b", lowered):
             reported_status = label

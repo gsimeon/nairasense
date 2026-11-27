@@ -230,12 +230,10 @@ def classify_banknote_offline(
     if not enrolled.get(str(best_denom)):
         warnings.append("COLOR_PRIOR_ONLY_ENROLL_SAMPLES_FOR_HIGHER_ACCURACY")
 
-    band = "high" if confidence >= 0.80 else "medium" if confidence >= 0.55 else "low"
-
     return CashInferenceResponse(
         inference_id=str(uuid4()),
         prediction={"denomination_ngn": best_denom, "confidence": confidence},
         image_quality={"accepted": True, "warnings": warnings},
-        decision={"requires_user_confirmation": True, "confidence_band": band},
+        decision={"requires_user_confirmation": True, "confidence_band": "experimental"},
         model={"name": "local-naira-cv", "version": "0.1.0-offline"},
     )

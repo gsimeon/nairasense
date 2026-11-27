@@ -294,8 +294,8 @@ export function CashSensePanel({
           <h2 id="result-title">2. Review the suggestion</h2>
           <p className="amount">₦{result.prediction.denomination_ngn.toLocaleString("en-NG")}</p>
           <p className="hint">
-            Uncalibrated experimental suggestion ({result.decision.confidence_band}). Always verify
-            and confirm before adding to your total.
+            Experimental suggestion: ₦{result.prediction.denomination_ngn.toLocaleString("en-NG")}.
+            Please confirm, correct, or reject before adding to your total.
           </p>
           <p className="prototype-warning">
             {result.model.version === "0.0.0-mock"

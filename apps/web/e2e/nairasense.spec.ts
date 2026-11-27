@@ -137,4 +137,19 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     await expect(page.getByRole("status")).toContainText("Could not check note");
     await expect(page.getByRole("heading", { name: "2. Review the suggestion" })).toHaveCount(0);
   });
+
+  test("Camera permission denied surfaces upload fallback cleanly", async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "mediaDevices", {
+        value: {
+          getUserMedia: () => Promise.reject(new DOMException("Permission denied", "NotAllowedError")),
+        },
+        configurable: true,
+      });
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Start live camera" }).click();
+    await expect(page.locator("p[role='alert']")).toContainText("Camera permission was denied");
+    await expect(page.getByRole("button", { name: "+ ₦500" })).toBeVisible();
+  });
 });
