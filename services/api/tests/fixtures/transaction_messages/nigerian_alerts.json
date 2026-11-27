@@ -64,5 +64,27 @@
       "reference": "PEND-1029",
       "multiple_amounts_detected": false
     }
+  },
+  {
+    "name": "bank_charge_missing_date_and_ref",
+    "source_type": "notification",
+    "raw_text": "SMS Alert Fee: Debit NGN 52.50. Avail Bal: NGN 14,200.00.",
+    "expected": {
+      "amount_kobo": 5250,
+      "reported_status": "Debit",
+      "reference": null,
+      "multiple_amounts_detected": true
+    }
+  },
+  {
+    "name": "ambiguous_credit_with_balance",
+    "source_type": "pasted_text",
+    "raw_text": "Credit: ₦20,000.00 from BOLA. Current Balance: ₦45,000.00. Ref: NIP-55123.",
+    "expected": {
+      "amount_kobo": 2000000,
+      "reported_status": "Credit",
+      "reference": "NIP-55123",
+      "multiple_amounts_detected": true
+    }
   }
 ]

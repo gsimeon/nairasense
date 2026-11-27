@@ -83,4 +83,58 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     await expect(page.getByText(`Signed in: ${userB}`)).toBeVisible();
     await expect(page.locator(".total-amount")).toHaveText("₦0");
   });
+
+  test("Offline pending queue survives browser reload and offline delete stays deleted", async ({
+    page,
+    context,
+  }) => {
+    const user = `restart_${Date.now()}`;
+    await page.goto("/");
+
+    await page.getByRole("button", { name: "Sign in / Sync" }).click();
+    await page.getByRole("button", { name: "Create account" }).first().click();
+    await page.getByLabel("Username").fill(user);
+    await page.getByLabel("Password (8+ characters)").fill("password123");
+    await page.locator("form.auth-form button[type='submit']").click();
+    await expect(page.getByText(`Signed in: ${user}`)).toBeVisible();
+
+    // Add ₦500 online first
+    await page.getByRole("button", { name: "+ ₦500" }).click();
+    await expect(page.getByText("Synced", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    // Go offline, add ₦100, then delete ₦500
+    await context.setOffline(true);
+    await page.getByRole("button", { name: "+ ₦100" }).click();
+    await page.getByRole("button", { name: "Remove Note 1, 500 Naira" }).click();
+    await expect(page.locator(".total-amount")).toHaveText("₦100");
+    await expect(page.getByText("2 pending sync")).toBeVisible();
+
+    // Reconnect and reload page -> pending ₦100 and deletion of ₦500 must both persist
+    await context.setOffline(false);
+    await page.reload();
+    await expect(page.getByText(`Signed in: ${user}`)).toBeVisible();
+    await expect(page.getByText("Synced", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".total-amount")).toHaveText("₦100");
+  });
+
+  test("Inference API failure announces error and never shows fake suggestion", async ({
+    page,
+  }) => {
+    await page.route("**/api/v1/cash/infer", (route) =>
+      route.fulfill({ status: 500, contentType: "application/json", body: '{"detail":"err"}' }),
+    );
+    await page.goto("/");
+
+    const pngBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    await page.locator("input[type='file']").first().setInputFiles({
+      name: "note.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(pngBase64, "base64"),
+    });
+    await page.getByRole("button", { name: "Identify uploaded photo" }).click();
+
+    await expect(page.getByRole("status")).toContainText("Could not check note");
+    await expect(page.getByRole("heading", { name: "2. Review the suggestion" })).toHaveCount(0);
+  });
 });
