@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type LiveCameraScannerProps = {
   busy: boolean;
   paused: boolean;
-  onCapture: (file: File) => Promise<void>;
+  onCapture: (file: File) => Promise<boolean>;
   onAnnounce: (message: string, speak?: boolean) => void;
 };
 
@@ -157,8 +157,12 @@ export function LiveCameraScanner({ busy, paused, onCapture, onAnnounce }: LiveC
 
     try {
       const file = new File([blob], `naira-live-${Date.now()}.jpg`, { type: "image/jpeg" });
-      await onCapture(file);
-      setScanFeedback("Snapshot sent for identification. See the suggestion below.");
+      const ok = await onCapture(file);
+      setScanFeedback(
+        ok
+          ? "Snapshot identified. Review the suggestion below."
+          : "Could not identify note. Adjust lighting or hold steady and try again.",
+      );
     } catch (err) {
       setScanFeedback(err instanceof Error ? err.message : "Failed to identify snapshot.");
     }

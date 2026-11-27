@@ -81,35 +81,38 @@ export function CashSensePanel({
   );
 
   const classifyFile = useCallback(
-    async (targetFile: File, announceStart: boolean) => {
+    async (targetFile: File, announceStart: boolean): Promise<boolean> => {
       setBusy(true);
       setResult(null);
       setShowCorrector(false);
       playCue("capture", cuesEnabled);
       if (announceStart) {
-        onAnnounce("Analyzing note image. Please wait.", true);
+        onAnnounce("Checking the note. Please wait.", true);
       }
       try {
         const data = await inferBanknoteImage(targetFile);
         setResult(data);
         if (data.image_quality.accepted) {
           playCue("detected", cuesEnabled);
-          const msg = formatDetectedNoteSpeech(
-            voiceLanguage,
-            data.prediction.denomination_ngn,
-            Math.round(data.prediction.confidence * 100),
-          );
+          const msg = formatDetectedNoteSpeech(voiceLanguage, data.prediction.denomination_ngn);
           onAnnounce(msg, true);
-        } else {
-          playCue("warning", cuesEnabled);
-          onAnnounce(
-            `Could not identify note (${data.image_quality.warnings.join(", ") || "low quality"}). Please adjust lighting or hold steady.`,
-            true,
-          );
+          return true;
         }
+        playCue("warning", cuesEnabled);
+        onAnnounce(
+          `Unable to recognise note (${data.image_quality.warnings.join(", ") || "low quality"}). Move into better light or hold steady and try again.`,
+          true,
+        );
+        return false;
       } catch (error) {
         playCue("error", cuesEnabled);
-        onAnnounce(error instanceof Error ? error.message : "Unable to reach the API.", true);
+        onAnnounce(
+          error instanceof Error
+            ? `Could not check note: ${error.message}. Please try again.`
+            : "Unable to reach the API. Please try again.",
+          true,
+        );
+        return false;
       } finally {
         setBusy(false);
       }
@@ -290,14 +293,14 @@ export function CashSensePanel({
           <p className="eyebrow">EXPERIMENTAL SUGGESTION · REQUIRES CONFIRMATION</p>
           <h2 id="result-title">2. Review the suggestion</h2>
           <p className="amount">₦{result.prediction.denomination_ngn.toLocaleString("en-NG")}</p>
-          <p>
-            Baseline match score: {(result.prediction.confidence * 100).toFixed(0)}% (
-            {result.decision.confidence_band})
+          <p className="hint">
+            Uncalibrated experimental suggestion ({result.decision.confidence_band}). Always verify
+            and confirm before adding to your total.
           </p>
           <p className="prototype-warning">
             {result.model.version === "0.0.0-mock"
               ? "Mock mode active. Do not rely on this suggestion for real cash."
-              : `Experimental baseline (${result.model.name} ${result.model.version}). Always verify and confirm before adding to your total.`}
+              : `Processed by experimental baseline (${result.model.name} ${result.model.version}). Not a validated Naira recognition model.`}
           </p>
           <div className="actions">
             <button

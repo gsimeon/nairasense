@@ -19,3 +19,5 @@ data/private/
 *.db
 naira_enrolled_prototypes.json
 *.tsbuildinfo
+test-results/
+playwright-report/

@@ -79,8 +79,9 @@ export function SyncStatusPanel({
       {isAuthenticated && failedItems.length > 0 && (
         <div className="prototype-warning" role="alert">
           <p>
-            {failedItems.length} record(s) could not be synced after multiple attempts. Your data is
-            still safely stored on this device.
+            {failedItems.length} record(s) could not be synced after multiple attempts. Your record
+            remains saved in this browser&apos;s local storage and is waiting to sync. Keep this
+            device available until synchronisation succeeds.
           </p>
           <ul className="entry-list" aria-label="Failed sync records">
             {failedItems.map((item) => {

@@ -129,7 +129,12 @@ export default function HomePage() {
   }, []);
 
   const flushSyncQueue = useCallback(
-    async (userId: string, existingSessionId: string | null, epoch: number) => {
+    async (
+      userId: string,
+      existingSessionId: string | null,
+      epoch: number,
+      ignoreBackoff = false,
+    ) => {
       if (syncInFlightRef.current) {
         // Queue a follow-up flush for the requesting account so it is never dropped
         pendingResyncRef.current = { userId, sessionId: existingSessionId, epoch };
@@ -142,7 +147,9 @@ export default function HomePage() {
         updateSyncCounters(queue);
 
         const nowMs = Date.now();
-        const readyItems = queue.filter((i) => i.status !== "failed" && (i.nextRetryAt ?? 0) <= nowMs);
+        const readyItems = queue.filter(
+          (i) => i.status !== "failed" && (ignoreBackoff || (i.nextRetryAt ?? 0) <= nowMs),
+        );
         if (readyItems.length === 0) return;
 
         let activeSession = existingSessionId;
@@ -383,7 +390,7 @@ export default function HomePage() {
     const onOnline = () => {
       setIsOnline(true);
       if (authUserId) {
-        void flushSyncQueue(authUserId, sessionId, accountEpochRef.current);
+        void flushSyncQueue(authUserId, sessionId, accountEpochRef.current, true);
       }
     };
     const onOffline = () => setIsOnline(false);
@@ -429,7 +436,7 @@ export default function HomePage() {
           payload: input,
           attempts: 0,
           status: "pending",
-          nextRetryAt: Date.now() + 1500,
+          nextRetryAt: 0,
           created_at: new Date().toISOString(),
         });
         setPendingSyncCount((c) => c + 1);
@@ -465,7 +472,7 @@ export default function HomePage() {
           targetId: entryId,
           attempts: 0,
           status: "pending",
-          nextRetryAt: Date.now() + 1500,
+          nextRetryAt: 0,
           created_at: new Date().toISOString(),
         });
         setPendingSyncCount((c) => c + 1);
@@ -539,7 +546,7 @@ export default function HomePage() {
           payload,
           attempts: 0,
           status: "pending",
-          nextRetryAt: Date.now() + 1500,
+          nextRetryAt: 0,
           created_at: new Date().toISOString(),
         });
         setPendingSyncCount((c) => c + 1);
@@ -573,7 +580,7 @@ export default function HomePage() {
           targetId: id,
           attempts: 0,
           status: "pending",
-          nextRetryAt: Date.now() + 1500,
+          nextRetryAt: 0,
           created_at: new Date().toISOString(),
         });
         setPendingSyncCount((c) => c + 1);

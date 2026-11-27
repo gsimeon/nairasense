@@ -19,20 +19,19 @@ const CURRENCY_WORD: Record<VoiceLanguage, string> = {
 export function formatDetectedNoteSpeech(
   lang: VoiceLanguage,
   denomination: number,
-  confidencePercent: number,
 ): string {
   const amt = denomination.toLocaleString("en-NG");
   switch (lang) {
     case "pcm":
-      return `I see ${amt} Naira, ${confidencePercent} percent sure. Talk or press Confirm to add am.`;
+      return `E be like ${amt} Naira. Abeg check am well, press Confirm or Correct.`;
     case "yo":
-      return `Mo rí Náírà ${amt}, ìdánilójú ìpín ${confidencePercent}. Tẹ Confirm láti fi kún un.`;
+      return `Ó dà bí Náírà ${amt}. Jọ̀wọ́ ṣàyẹ̀wò rẹ̀, tẹ Confirm tàbí Correct.`;
     case "ha":
-      return `Na ga Naira ${amt}, tabbas kashi ${confidencePercent}. Danna Confirm don ƙarawa.`;
+      return `Kamar Naira ${amt} ne. A duba sosai, a danna Confirm ko Correct.`;
     case "ig":
-      return `Ahụrụ m Naịra ${amt}, ntụkwasị obi pasent ${confidencePercent}. Pịa Confirm ka itinye ya.`;
+      return `Ọ dị ka Naịra ${amt}. Biko lelee ya, pịa Confirm ma ọ bụ Correct.`;
     default:
-      return `Detected ${amt} ${CURRENCY_WORD[lang]}, ${confidencePercent} percent confidence. Confirm, correct, or reject before adding to your total.`;
+      return `Possible ${amt} ${CURRENCY_WORD[lang]} note. Please confirm, correct, or reject before adding to your total.`;
   }
 }
 
