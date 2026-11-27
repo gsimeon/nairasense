@@ -40,8 +40,6 @@ CREATE TABLE IF NOT EXISTS cash_entries (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cash_entries_session ON cash_entries(session_id, created_at ASC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_entries_idempotency
-    ON cash_entries(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS transaction_records (
     id TEXT PRIMARY KEY,
@@ -64,9 +62,6 @@ CREATE TABLE IF NOT EXISTS transaction_records (
     updated_at TEXT NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_idempotency
-    ON transaction_records(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
-
 CREATE TABLE IF NOT EXISTS user_preferences (
     user_id TEXT PRIMARY KEY,
     text_size TEXT NOT NULL DEFAULT 'large' CHECK (text_size IN ('standard', 'large', 'extra_large')),
@@ -76,6 +71,19 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     updated_at TEXT NOT NULL
 );
 """
+
+_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_entries_idempotency
+    ON cash_entries(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_idempotency
+    ON transaction_records(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+"""
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, col_type: str) -> None:
+    cols = {row["name"] for row in conn.execute(f"PRAGMA table_info({table});").fetchall()}
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type};")
 
 
 def _connect() -> sqlite3.Connection:
@@ -92,6 +100,11 @@ def init_db() -> None:
     """Initialize local SQLite tables once at startup (or test setup)."""
     with _connect() as conn:
         conn.executescript(_SCHEMA_SQL)
+        _ensure_column(conn, "cash_entries", "idempotency_key", "TEXT")
+        _ensure_column(conn, "cash_entries", "idempotency_hash", "TEXT")
+        _ensure_column(conn, "transaction_records", "idempotency_key", "TEXT")
+        _ensure_column(conn, "transaction_records", "idempotency_hash", "TEXT")
+        conn.executescript(_INDEX_SQL)
         conn.commit()
 
 
