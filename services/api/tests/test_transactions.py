@@ -424,7 +424,7 @@ def test_transaction_partial_updates() -> None:
     assert fields_only_res.status_code == 200
     assert fields_only_res.json()["extracted_fields"]["amount_entry_mode"] == "candidate_selected"
 
-    # 3. Clear date to null
+    # 3. Clear date to null -> server derives ambiguous_date_detected=False
     clear_date_res = client.patch(
         f"/api/v1/transactions/{tx_id}",
         headers=headers,
@@ -432,6 +432,32 @@ def test_transaction_partial_updates() -> None:
     )
     assert clear_date_res.status_code == 200
     assert clear_date_res.json()["transaction_date"] is None
+    assert clear_date_res.json()["extracted_fields"]["ambiguous_date_detected"] is False
+
+    # 3b. Restore date to ambiguous without confirmation -> server derives ambiguity and rejects (422)
+    restore_amb_res = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={
+            "transaction_date": "03/04/2026",
+            "extracted_fields": {"ambiguous_date_detected": False},
+        },
+    )
+    assert restore_amb_res.status_code == 422
+
+    # 3c. Clear selected candidate via extracted_fields -> amount_entry_mode becomes manual
+    clear_cand_res = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={
+            "extracted_fields": {
+                "selected_candidate_id": None,
+                "selected_candidate_context": None,
+            }
+        },
+    )
+    assert clear_cand_res.status_code == 200
+    assert clear_cand_res.json()["extracted_fields"]["amount_entry_mode"] == "manual"
 
     # 4. Change previously confirmed record back to unconfirmed (even with an ambiguous date)
     unconfirm_res = client.patch(

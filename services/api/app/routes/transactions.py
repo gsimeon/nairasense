@@ -80,15 +80,18 @@ def _validate_transaction_state(
                 status_code=422,
                 detail="Invalid transaction_date; expected a valid calendar date.",
             )
+        fields["ambiguous_date_detected"] = _is_ambiguous_date(clean_date)
         if (
             user_confirmed
-            and (_is_ambiguous_date(clean_date) or fields.get("ambiguous_date_detected") is True)
+            and fields["ambiguous_date_detected"]
             and fields.get("date_confirmed_by_user") is not True
         ):
             raise HTTPException(
                 status_code=422,
                 detail="Ambiguous transaction date must be explicitly confirmed or cleared before saving.",
             )
+    else:
+        fields["ambiguous_date_detected"] = False
 
     selected_id = fields.get("selected_candidate_id")
     if selected_id is not None:
@@ -288,13 +291,8 @@ def update_transaction(
             merged_fields["selected_candidate_id"] = None
             merged_fields["selected_candidate_context"] = None
 
-        # If caller changes transaction_date without supplying new extracted_fields, recompute ambiguity and reset confirmation
+        # If caller changes transaction_date without supplying new extracted_fields, reset confirmation
         if "transaction_date" in updates and "extracted_fields" not in updates:
-            merged_fields["ambiguous_date_detected"] = (
-                _is_ambiguous_date(merged_date.strip())
-                if isinstance(merged_date, str) and merged_date.strip()
-                else False
-            )
             merged_fields["date_confirmed_by_user"] = False
 
         validated_fields = _validate_transaction_state(
