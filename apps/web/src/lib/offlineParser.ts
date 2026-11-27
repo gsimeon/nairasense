@@ -47,9 +47,9 @@ const OFFLINE_OUTCOME_RULES: Array<[RegExp, string]> = [
 ];
 
 const FROM_PATTERN =
-  /(?:from|sender)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:to|recipient|beneficiary|ref|reference|date|amt|amount|status)\s*:|$))/i;
+  /(?:from|sender)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:to|recipient|beneficiary|ref|reference|date|amt|amount|status)\s*:|\b(?:failed|declined|pending|reversed|successful|success|approved|completed|due\s+to)\b|$))/i;
 const TO_PATTERN =
-  /(?:to|recipient|beneficiary)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:from|sender|ref|reference|date|amt|amount|status)\s*:|$))/i;
+  /(?:to|recipient|beneficiary)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:from|sender|ref|reference|date|amt|amount|status)\s*:|\b(?:failed|declined|pending|reversed|successful|success|approved|completed|due\s+to)\b|$))/i;
 const DATE_PATTERN =
   /(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?|\d{2}\/\d{2}\/\d{4}|\d{2}-\d{2}-\d{4})/;
 
@@ -62,7 +62,18 @@ function cleanLabel(raw: string | undefined): string | null {
 
 function validateDateToken(token: string | undefined): string | null {
   if (!token) return null;
-  const datePart = token.split(/[T ]/)[0] ?? "";
+  const match = token.match(/^([^\sT]+)(?:[T ](.+))?$/);
+  if (!match) return null;
+  const datePart = match[1] ?? "";
+  const timePart = match[2];
+  if (timePart !== undefined) {
+    const tMatch = timePart.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (!tMatch) return null;
+    const hh = Number(tMatch[1]);
+    const mm = Number(tMatch[2]);
+    const ss = tMatch[3] !== undefined ? Number(tMatch[3]) : 0;
+    if (hh > 23 || mm > 59 || ss > 59) return null;
+  }
   let year: number;
   let month: number;
   let day: number;

@@ -12,11 +12,11 @@ _REF_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _FROM_PATTERN = re.compile(
-    r"(?:from|sender)\s*[:\-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:to|recipient|beneficiary|ref|reference|date|amt|amount|status)\s*:|$))",
+    r"(?:from|sender)\s*[:\-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:to|recipient|beneficiary|ref|reference|date|amt|amount|status)\s*:|\b(?:failed|declined|pending|reversed|successful|success|approved|completed|due\s+to)\b|$))",
     re.IGNORECASE,
 )
 _TO_PATTERN = re.compile(
-    r"(?:to|recipient|beneficiary)\s*[:\-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:from|sender|ref|reference|date|amt|amount|status)\s*:|$))",
+    r"(?:to|recipient|beneficiary)\s*[:\-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:from|sender|ref|reference|date|amt|amount|status)\s*:|\b(?:failed|declined|pending|reversed|successful|success|approved|completed|due\s+to)\b|$))",
     re.IGNORECASE,
 )
 _DATE_PATTERN = re.compile(
@@ -35,7 +35,20 @@ def _clean_label(raw: str | None) -> str | None:
 def _validate_date_token(token: str | None) -> str | None:
     if not token:
         return None
-    date_part = re.split(r"[T ]", token)[0]
+    parts = re.split(r"[T ]", token, maxsplit=1)
+    date_part = parts[0]
+    time_part = parts[1] if len(parts) > 1 else None
+    if time_part is not None:
+        time_valid = False
+        for t_fmt in ("%H:%M:%S", "%H:%M"):
+            try:
+                datetime.strptime(time_part, t_fmt)
+                time_valid = True
+                break
+            except ValueError:
+                continue
+        if not time_valid:
+            return None
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
         try:
             datetime.strptime(date_part, fmt)
