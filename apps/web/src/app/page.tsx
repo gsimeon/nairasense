@@ -305,6 +305,7 @@ export default function HomePage() {
 
         await Promise.all(staleSyncedEntries.map((entry) => deleteOfflineCashEntry(entry.id)));
         await Promise.all(allRemoteEntries.map((entry) => saveOfflineCashEntry(ns, entry)));
+        if (accountEpochRef.current !== epoch) return;
 
         const reconciledCash = [
           ...allRemoteEntries,
@@ -325,6 +326,7 @@ export default function HomePage() {
         // Reconcile remote transaction list cleanly while respecting pending delete tombstones
         const visibleRemoteTx = remoteTx.filter((t) => !deletedTxIds.has(t.id));
         const currentLocalTx = await loadOfflineTransactions(ns);
+        if (accountEpochRef.current !== epoch) return;
         const unsyncedLocal = currentLocalTx.filter((t) => !t.synced);
         const merged = [
           ...unsyncedLocal,

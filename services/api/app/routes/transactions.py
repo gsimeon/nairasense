@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 
 from app.auth import AuthUser, get_current_user
 from app.db import get_conn, parse_json_dict
@@ -126,13 +126,28 @@ def create_transaction(
 
 @router.get("", response_model=list[TransactionResponse])
 def list_transactions(
+    response: Response,
     current_user: Annotated[AuthUser, Depends(get_current_user)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[TransactionResponse]:
     with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM transaction_records WHERE user_id = ? ORDER BY created_at DESC",
+        total_row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM transaction_records WHERE user_id = ?",
             (current_user.user_id,),
+        ).fetchone()
+        total = int(total_row["cnt"]) if total_row else 0
+        rows = conn.execute(
+            """
+            SELECT * FROM transaction_records
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (current_user.user_id, limit, offset),
         ).fetchall()
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Has-More"] = "true" if (offset + len(rows)) < total else "false"
     return [_row_to_response(row) for row in rows]
 
 

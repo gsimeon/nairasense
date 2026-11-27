@@ -101,3 +101,30 @@ def test_transaction_crud_lifecycle() -> None:
     del_res = client.delete(f"/api/v1/transactions/{tx_id}", headers=headers)
     assert del_res.status_code == 204
     assert client.get("/api/v1/transactions", headers=headers).json() == []
+
+
+def test_transactions_pagination() -> None:
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"username": "tx_page_tester", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    for i in range(5):
+        res = client.post(
+            "/api/v1/transactions",
+            headers=headers,
+            json={"amount_kobo": (i + 1) * 1000, "currency": "NGN", "source_type": "pasted_text"},
+        )
+        assert res.status_code == 201
+
+    p1 = client.get("/api/v1/transactions?limit=3&offset=0", headers=headers)
+    assert p1.status_code == 200
+    assert len(p1.json()) == 3
+    assert p1.headers["x-total-count"] == "5"
+    assert p1.headers["x-has-more"] == "true"
+
+    p2 = client.get("/api/v1/transactions?limit=3&offset=3", headers=headers)
+    assert p2.status_code == 200
+    assert len(p2.json()) == 2
+    assert p2.headers["x-has-more"] == "false"

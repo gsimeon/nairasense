@@ -87,10 +87,15 @@ export async function enrollBanknoteSample(
   file: File,
   denominationNgn: number,
 ): Promise<{ denomination_ngn: number; sample_count: number }> {
+  const token = getStoredToken();
   const body = new FormData();
   body.append("denomination_ngn", String(denominationNgn));
   body.append("image", file);
-  const response = await fetch(`${API_BASE}/cash/enroll`, { method: "POST", body });
+  const response = await fetch(`${API_BASE}/cash/enroll`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body,
+  });
   if (!response.ok) {
     throw new Error(`Enrollment failed (${response.status})`);
   }
@@ -116,11 +121,17 @@ export type CashSessionSummary = {
 export async function listAllCashSessionsFromApi(): Promise<CashSessionSummary[]> {
   const all: CashSessionSummary[] = [];
   const limit = 20;
-  let offset = 0;
+  let cursorCreatedAt: string | null = null;
+  let cursorId: string | null = null;
 
   while (true) {
     const token = getStoredToken();
-    const response = await fetch(`${API_BASE}/cash/sessions?limit=${limit}&offset=${offset}`, {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursorCreatedAt && cursorId) {
+      params.set("cursor_created_at", cursorCreatedAt);
+      params.set("cursor_id", cursorId);
+    }
+    const response = await fetch(`${API_BASE}/cash/sessions?${params.toString()}`, {
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -135,7 +146,9 @@ export async function listAllCashSessionsFromApi(): Promise<CashSessionSummary[]
     if (hasMoreHeader === "false" || page.length < limit) {
       break;
     }
-    offset += page.length;
+    const last = page[page.length - 1];
+    cursorCreatedAt = last.created_at;
+    cursorId = last.id;
   }
 
   return all;
@@ -199,7 +212,31 @@ export async function createTransactionInApi(
 }
 
 export async function listTransactionsFromApi(): Promise<TransactionRecord[]> {
-  return requestJson<TransactionRecord[]>("/transactions");
+  const all: TransactionRecord[] = [];
+  const limit = 50;
+  let offset = 0;
+
+  while (true) {
+    const token = getStoredToken();
+    const response = await fetch(`${API_BASE}/transactions?limit=${limit}&offset=${offset}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Request failed (${response.status})`);
+    }
+    const page = (await response.json()) as TransactionRecord[];
+    all.push(...page);
+    const hasMoreHeader = response.headers.get("X-Has-More");
+    if (hasMoreHeader === "false" || page.length < limit) {
+      break;
+    }
+    offset += page.length;
+  }
+
+  return all;
 }
 
 export async function deleteTransactionFromApi(txId: string): Promise<void> {

@@ -209,6 +209,17 @@ def test_cash_sessions_pagination_restores_25_plus_sessions() -> None:
     fetched_ids = {s["id"] for s in page1.json()} | {s["id"] for s in page2.json()}
     assert fetched_ids == set(created_ids)
 
+    # Cursor-based pagination walks without skipping or duplicating
+    last = page1.json()[-1]
+    cursor_page2 = client.get(
+        f"/api/v1/cash/sessions?limit=20&cursor_created_at={last['created_at']}&cursor_id={last['id']}",
+        headers=headers,
+    )
+    assert cursor_page2.status_code == 200
+    assert len(cursor_page2.json()) == 5
+    cursor_ids = {s["id"] for s in page1.json()} | {s["id"] for s in cursor_page2.json()}
+    assert cursor_ids == set(created_ids)
+
 
 def test_parse_vision_payload_accepts_valid_and_abstains_on_invalid() -> None:
     from app.services.banknote_classifier import parse_vision_payload

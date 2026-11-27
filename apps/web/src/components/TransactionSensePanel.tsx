@@ -276,16 +276,27 @@ export function TransactionSensePanel({
                     <button
                       key={cand}
                       type="button"
+                      aria-pressed={amountNaira === cand}
                       className={amountNaira === cand ? "primary small-btn" : "secondary small-btn"}
-                      onClick={() => setAmountNaira(cand)}
+                      onClick={() => {
+                        setAmountNaira(cand);
+                        onAnnounce(
+                          `Selected ${Number(cand).toLocaleString("en-NG", { minimumFractionDigits: 2 })} Naira.`,
+                          true,
+                        );
+                      }}
                     >
                       ₦{Number(cand).toLocaleString("en-NG", { minimumFractionDigits: 2 })}
                     </button>
                   ))}
                   <button
                     type="button"
-                    className="secondary small-btn"
-                    onClick={() => setAmountNaira("")}
+                    aria-pressed={amountNaira === ""}
+                    className={amountNaira === "" ? "primary small-btn" : "secondary small-btn"}
+                    onClick={() => {
+                      setAmountNaira("");
+                      onAnnounce("Amount left unknown.", true);
+                    }}
                   >
                     Leave unknown
                   </button>
