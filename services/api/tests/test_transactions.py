@@ -339,6 +339,81 @@ def test_ambiguous_date_requires_confirmation_on_create() -> None:
     assert patch_manual_amt.json()["extracted_fields"]["amount_entry_mode"] == "manual"
 
 
+def test_transaction_partial_updates() -> None:
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"username": "partial_upd_tester", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    create_res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_kobo": 50000,
+            "currency": "NGN",
+            "transaction_date": "03/04/2026",
+            "source_type": "notification",
+            "extracted_fields": {
+                "labeled_amounts": [{"id": "cand-1", "amount_ngn": "500.00", "context": "Amount"}],
+                "selected_candidate_id": "cand-1",
+                "selected_candidate_context": "Amount",
+                "ambiguous_date_detected": True,
+                "date_confirmed_by_user": True,
+            },
+            "user_confirmed": True,
+        },
+    )
+    assert create_res.status_code == 201
+    tx_id = create_res.json()["id"]
+
+    # 1. Change date and amount together
+    both_res = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={"amount_kobo": 88000, "transaction_date": "26/11/2026"},
+    )
+    assert both_res.status_code == 200
+    assert both_res.json()["amount_kobo"] == 88000
+    assert both_res.json()["transaction_date"] == "26/11/2026"
+    assert both_res.json()["extracted_fields"]["amount_entry_mode"] == "manual"
+    assert both_res.json()["extracted_fields"]["selected_candidate_id"] is None
+
+    # 2. Change extracted_fields without changing amount_kobo (valid candidate match succeeds)
+    fields_only_res = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={
+            "extracted_fields": {
+                "labeled_amounts": [{"id": "cand-1", "amount_ngn": "880.00", "context": "Amount"}],
+                "selected_candidate_id": "cand-1",
+                "selected_candidate_context": "Amount",
+            }
+        },
+    )
+    assert fields_only_res.status_code == 200
+    assert fields_only_res.json()["extracted_fields"]["amount_entry_mode"] == "candidate_selected"
+
+    # 3. Clear date to null
+    clear_date_res = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={"transaction_date": None},
+    )
+    assert clear_date_res.status_code == 200
+    assert clear_date_res.json()["transaction_date"] is None
+
+    # 4. Change previously confirmed record back to unconfirmed (even with an ambiguous date)
+    unconfirm_res = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={"transaction_date": "03/04/2026", "user_confirmed": False},
+    )
+    assert unconfirm_res.status_code == 200
+    assert unconfirm_res.json()["user_confirmed"] is False
+    assert unconfirm_res.json()["transaction_date"] == "03/04/2026"
+
+
 def test_transaction_crud_lifecycle() -> None:
     reg = client.post(
         "/api/v1/auth/register",

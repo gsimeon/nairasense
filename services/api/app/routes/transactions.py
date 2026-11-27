@@ -288,8 +288,13 @@ def update_transaction(
             merged_fields["selected_candidate_id"] = None
             merged_fields["selected_candidate_context"] = None
 
-        # If caller changes transaction_date without supplying new extracted_fields, reset stale date confirmation
+        # If caller changes transaction_date without supplying new extracted_fields, recompute ambiguity and reset confirmation
         if "transaction_date" in updates and "extracted_fields" not in updates:
+            merged_fields["ambiguous_date_detected"] = (
+                _is_ambiguous_date(merged_date.strip())
+                if isinstance(merged_date, str) and merged_date.strip()
+                else False
+            )
             merged_fields["date_confirmed_by_user"] = False
 
         validated_fields = _validate_transaction_state(
