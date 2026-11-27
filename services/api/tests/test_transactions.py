@@ -367,7 +367,7 @@ def test_transaction_partial_updates() -> None:
     assert create_res.status_code == 201
     tx_id = create_res.json()["id"]
 
-    # 1. Change date and amount together
+    # 1. Change date (ambiguous -> unambiguous) and amount together
     both_res = client.patch(
         f"/api/v1/transactions/{tx_id}",
         headers=headers,
@@ -378,6 +378,34 @@ def test_transaction_partial_updates() -> None:
     assert both_res.json()["transaction_date"] == "26/11/2026"
     assert both_res.json()["extracted_fields"]["amount_entry_mode"] == "manual"
     assert both_res.json()["extracted_fields"]["selected_candidate_id"] is None
+    assert both_res.json()["extracted_fields"]["ambiguous_date_detected"] is False
+    assert both_res.json()["extracted_fields"]["date_confirmed_by_user"] is False
+
+    # 1b. Change date (unambiguous -> ambiguous) without confirmation is rejected (422)
+    unamb_to_amb = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={"transaction_date": "04/03/2026"},
+    )
+    assert unamb_to_amb.status_code == 422
+
+    # 1c. Change date and extracted_fields together in the same request (confirmed ambiguous date)
+    date_and_fields = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={
+            "transaction_date": "04/03/2026",
+            "extracted_fields": {
+                "ambiguous_date_detected": True,
+                "date_confirmed_by_user": True,
+            },
+        },
+    )
+    assert date_and_fields.status_code == 200
+    assert date_and_fields.json()["transaction_date"] == "04/03/2026"
+    assert date_and_fields.json()["extracted_fields"]["ambiguous_date_detected"] is True
+    assert date_and_fields.json()["extracted_fields"]["date_confirmed_by_user"] is True
+    assert date_and_fields.json()["extracted_fields"]["amount_entry_mode"] == "manual"
 
     # 2. Change extracted_fields without changing amount_kobo (valid candidate match succeeds)
     fields_only_res = client.patch(
@@ -388,6 +416,8 @@ def test_transaction_partial_updates() -> None:
                 "labeled_amounts": [{"id": "cand-1", "amount_ngn": "880.00", "context": "Amount"}],
                 "selected_candidate_id": "cand-1",
                 "selected_candidate_context": "Amount",
+                "ambiguous_date_detected": True,
+                "date_confirmed_by_user": True,
             }
         },
     )
