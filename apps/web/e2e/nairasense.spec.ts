@@ -290,5 +290,17 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     await page.getByRole("button", { name: "Extract fields for review" }).click();
     await expect(page.getByLabel("Transaction direction")).toHaveValue("Debit");
     await expect(page.getByLabel("Reported outcome")).toHaveValue("Failed");
+
+    // Negated reversal ("not reversed") must not report Reversed offline or online
+    const notReversedText = "Debit NGN 5,000.00 failed; transaction was not reversed.";
+    await page.getByLabel("Alert or receipt text").fill(notReversedText);
+    await page.getByRole("button", { name: "Extract fields for review" }).click();
+    await expect(page.getByLabel("Reported outcome")).toHaveValue("Failed");
+
+    await context.setOffline(true);
+    await page.getByLabel("Alert or receipt text").fill(notReversedText);
+    await page.getByRole("button", { name: "Extract fields for review" }).click();
+    await expect(page.getByLabel("Reported outcome")).toHaveValue("Failed");
+    await context.setOffline(false);
   });
 });

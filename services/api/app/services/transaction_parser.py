@@ -86,6 +86,8 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
         " failed ",
         lowered,
     )
+    outcome_text = re.sub(r"\bnot\s+(?:reversed|reversal)\b", " not_reversed ", outcome_text)
+    outcome_text = re.sub(r"\bnot\s+(?:failed|declined)\b", " not_failed ", outcome_text)
     outcome_statuses: list[str] = []
     for keyword, label in (
         ("reversed", "Reversed"),

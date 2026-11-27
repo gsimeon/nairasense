@@ -79,10 +79,10 @@ function parseLocallyOffline(rawText: string, sourceType: SourceType) {
   const transactionDirection =
     matchedDirections.length > 1 ? "Ambiguous" : matchedDirections[0] ?? null;
 
-  const outcomeText = rawText.replace(
-    /\b(?:not\s+(?:successful|success|approved)|unsuccessful)\b/gi,
-    " failed ",
-  );
+  const outcomeText = rawText
+    .replace(/\b(?:not\s+(?:successful|success|approved)|unsuccessful)\b/gi, " failed ")
+    .replace(/\bnot\s+(?:reversed|reversal)\b/gi, " not_reversed ")
+    .replace(/\bnot\s+(?:failed|declined)\b/gi, " not_failed ");
   const outcomeStatuses: string[] = [];
   for (const [pattern, label] of OFFLINE_OUTCOME_RULES) {
     if (pattern.test(outcomeText) && !outcomeStatuses.includes(label)) {
@@ -324,6 +324,12 @@ export function TransactionSensePanel({
         <section className="panel result" aria-labelledby="tx-review-title">
           <h2 id="tx-review-title">2. Review &amp; confirm fields</h2>
           {disclaimer && <p className="prototype-warning">{disclaimer}</p>}
+          {Boolean(rawExtractedFields.ambiguous_status_detected) && (
+            <p className="prototype-warning" role="alert">
+              Conflicting outcome words were detected in this message. Please verify the reported
+              outcome before saving.
+            </p>
+          )}
           <form onSubmit={handleSave} className="review-form">
             {multipleAmountsDetected && (
               <div className="prototype-warning" role="group" aria-label="Choose transaction amount">

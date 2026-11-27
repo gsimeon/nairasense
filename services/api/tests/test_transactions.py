@@ -74,6 +74,10 @@ def test_direction_does_not_override_outcome() -> None:
         ("Debit of NGN 2,000 was unsuccessful.", "Debit", "Failed"),
         ("Reversal request pending for NGN 3,500.", None, "Ambiguous (Review Required)"),
         ("Debit NGN 4,000 successful, but refund pending.", "Debit", "Ambiguous (Review Required)"),
+        ("The transaction was not reversed. NGN 5,000.", None, None),
+        ("Debit NGN 5,000 failed; not reversed.", "Debit", "Failed"),
+        ("Reversal failed for NGN 2,500.", None, "Ambiguous (Review Required)"),
+        ("Refund pending for NGN 1,200.", None, "Pending"),
     ]
     for raw_text, expected_direction, expected_outcome in cases:
         res = client.post(

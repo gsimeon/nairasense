@@ -214,5 +214,41 @@
       "reference": "DRP-505",
       "multiple_amounts_detected": false
     }
+  },
+  {
+    "name": "not_reversed_negation",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00 failed; transaction was not reversed. Ref: NRV-601.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Failed",
+      "transaction_direction": "Debit",
+      "reference": "NRV-601",
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "reversal_failed_ambiguous",
+    "source_type": "notification",
+    "raw_text": "Reversal failed for NGN 2,500.00. Ref: RVF-602.",
+    "expected": {
+      "amount_kobo": 250000,
+      "reported_status": "Ambiguous (Review Required)",
+      "transaction_direction": null,
+      "reference": "RVF-602",
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "refund_pending_single_outcome",
+    "source_type": "notification",
+    "raw_text": "Refund pending for NGN 1,200.00. Ref: RFP-603.",
+    "expected": {
+      "amount_kobo": 120000,
+      "reported_status": "Pending",
+      "transaction_direction": null,
+      "reference": "RFP-603",
+      "multiple_amounts_detected": false
+    }
   }
 ]
