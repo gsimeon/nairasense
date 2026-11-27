@@ -29,7 +29,9 @@ export function SyncStatusPanel({
         ? !isOnline
           ? `Waiting for internet connection (${pendingCount} record(s) saved on this device).`
           : `${pendingCount} record(s) saved on this device and waiting to synchronise.`
-        : "Your record has synchronised.";
+        : lastSyncedAt
+          ? "Your record has synchronised."
+          : "No records to synchronise yet.";
 
   return (
     <section className="panel" aria-labelledby="sync-status-title">

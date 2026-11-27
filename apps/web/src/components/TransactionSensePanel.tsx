@@ -372,23 +372,32 @@ export function TransactionSensePanel({
             </div>
             <div className="field">
               <label htmlFor="tx-direction">Transaction direction</label>
-              <input
+              <select
                 id="tx-direction"
-                type="text"
-                placeholder="Debit or Credit"
                 value={transactionDirection}
                 onChange={(e) => setTransactionDirection(e.target.value)}
-              />
+              >
+                <option value="">Unknown / Not specified</option>
+                <option value="Debit">Debit</option>
+                <option value="Credit">Credit</option>
+                <option value="Ambiguous">Ambiguous</option>
+              </select>
             </div>
             <div className="field">
               <label htmlFor="tx-status">Reported outcome</label>
-              <input
+              <select
                 id="tx-status"
-                type="text"
-                placeholder="Successful, Pending, Failed, or Reversed"
                 value={reportedStatus}
                 onChange={(e) => setReportedStatus(e.target.value)}
-              />
+              >
+                <option value="">Unknown / Needs review</option>
+                <option value="Successful">Successful</option>
+                <option value="Pending">Pending</option>
+                <option value="Failed">Failed</option>
+                <option value="Reversed">Reversed</option>
+                <option value="Ambiguous (Review Required)">Ambiguous (Review Required)</option>
+                <option value="Verified by user">Verified by user</option>
+              </select>
             </div>
             <div className="field">
               <label htmlFor="tx-sender">Sender</label>
@@ -450,6 +459,9 @@ export function TransactionSensePanel({
                 <div>
                   <p className="tx-amount">{formatNairaFromKobo(rec.amount_kobo)}</p>
                   <p className="hint">
+                    {typeof rec.extracted_fields?.transaction_direction === "string"
+                      ? `${rec.extracted_fields.transaction_direction} · `
+                      : ""}
                     {rec.reported_status ? `${rec.reported_status} · ` : ""}
                     {rec.sender_label ? `From ${rec.sender_label} · ` : ""}
                     {rec.recipient_label ? `To ${rec.recipient_label} · ` : ""}

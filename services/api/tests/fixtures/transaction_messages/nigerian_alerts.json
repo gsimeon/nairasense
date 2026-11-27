@@ -142,5 +142,41 @@
       "reference": "AMB-774",
       "multiple_amounts_detected": false
     }
+  },
+  {
+    "name": "declined_debit_alert",
+    "source_type": "notification",
+    "raw_text": "Debit card attempt of NGN 7,500.00 was declined. Ref: DEC-301.",
+    "expected": {
+      "amount_kobo": 750000,
+      "reported_status": "Failed",
+      "transaction_direction": "Debit",
+      "reference": "DEC-301",
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "multi_event_conflicting_outcomes",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 3,000.00 successful; fee NGN 50.00 pending. Ref: MUL-902.",
+    "expected": {
+      "amount_kobo": 300000,
+      "reported_status": "Ambiguous (Review Required)",
+      "transaction_direction": "Debit",
+      "reference": "MUL-902",
+      "multiple_amounts_detected": true
+    }
+  },
+  {
+    "name": "gtb_credit_missing_date",
+    "source_type": "notification",
+    "raw_text": "Acct: ***1234. Amt: NGN 18,250.00 CR. Credit successful. Ref: GTB-77182.",
+    "expected": {
+      "amount_kobo": 1825000,
+      "reported_status": "Successful",
+      "transaction_direction": "Credit",
+      "reference": "GTB-77182",
+      "multiple_amounts_detected": false
+    }
   }
 ]

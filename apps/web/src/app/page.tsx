@@ -429,8 +429,11 @@ export default function HomePage() {
         const created = await addCashEntryToApi(activeSession, input, localId);
         const syncedEntry: CashEntry = { ...created, synced: true };
         await saveOfflineCashEntry(targetNamespace, syncedEntry);
+        const syncedNow = new Date().toISOString();
+        await setLastSyncedAt(targetNamespace, syncedNow);
         if (accountEpochRef.current === epoch) {
           setCashEntries((prev) => [...prev, syncedEntry]);
+          setLastSyncedAtState(syncedNow);
         }
         return;
       } catch {
@@ -548,8 +551,11 @@ export default function HomePage() {
         const saved = await createTransactionInApi(payload, localId);
         const synced: TransactionRecord = { ...saved, synced: true };
         await saveOfflineTransaction(targetNamespace, synced);
+        const syncedNow = new Date().toISOString();
+        await setLastSyncedAt(targetNamespace, syncedNow);
         if (accountEpochRef.current === epoch) {
           setTransactions((prev) => [synced, ...prev]);
+          setLastSyncedAtState(syncedNow);
         }
         return;
       } catch {
@@ -627,7 +633,9 @@ export default function HomePage() {
         ? !isOnline
           ? "Waiting for internet connection"
           : `Saved on this device (${pendingSyncCount} waiting to sync)`
-        : "Your record has synchronised";
+        : lastSyncedAt
+          ? "Your record has synchronised"
+          : "No records to synchronise";
 
   return (
     <>
