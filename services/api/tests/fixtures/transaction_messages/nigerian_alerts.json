@@ -670,5 +670,21 @@
       "multiple_amounts_detected": false,
       "ambiguous_status_detected": false
     }
+  },
+  {
+    "name": "ambiguous_numeric_date_flagged",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00. Date: 03/04/2026. Ref: AMB-DT1. Successful.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Successful",
+      "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": "03/04/2026",
+      "reference": "AMB-DT1",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
   }
 ]

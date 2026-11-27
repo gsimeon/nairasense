@@ -12,8 +12,10 @@ export interface OfflineExtractedTransaction {
     parser: string;
     multiple_amounts_detected: boolean;
     candidate_amounts_ngn: string[];
+    amount_contexts: Record<string, string>;
     transaction_direction: string | null;
     ambiguous_status_detected: boolean;
+    ambiguous_date_detected: boolean;
     candidate_statuses: string[];
   };
   disclaimer: string;
@@ -100,17 +102,43 @@ function validateDateToken(token: string | undefined): string | null {
   return token;
 }
 
+function isAmbiguousDate(token: string | null): boolean {
+  if (!token) return false;
+  const datePart = token.split(/[T ]/)[0] ?? "";
+  const match = datePart.match(/^(\d{2})\/(\d{2})\/\d{4}$|^(\d{2})-(\d{2})-\d{4}$/);
+  if (!match) return false;
+  const first = Number(match[1] ?? match[3]);
+  const second = Number(match[2] ?? match[4]);
+  return first <= 12 && second <= 12 && first !== second;
+}
+
+function classifyAmountContext(rawText: string, startIdx: number): string {
+  const prefix = rawText.slice(Math.max(0, startIdx - 40), startIdx).toLowerCase();
+  if (/\b(?:avail(?:able)?\s*bal(?:ance)?)\b/.test(prefix)) return "Available Balance";
+  if (/\b(?:new\s+balance|current\s+balance|balance|bal)\b/.test(prefix)) return "Balance";
+  if (/\b(?:fee|charge|vat|commission)\b/.test(prefix)) return "Fee";
+  if (/\brefund\b/.test(prefix)) return "Refund";
+  if (/\b(?:amt|amount|debit|debited|credit|credited|transfer|purchase)\b/.test(prefix)) {
+    return "Amount";
+  }
+  return "Other";
+}
+
 export function parseLocallyOffline(
   rawText: string,
   sourceType: SourceType,
 ): OfflineExtractedTransaction {
   const amtRegex = /(?:NGN|₦|N)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/gi;
   const candidates: string[] = [];
+  const amountContexts: Record<string, string> = {};
   let match: RegExpExecArray | null;
   while ((match = amtRegex.exec(rawText)) !== null) {
     const cleaned = match[1].replace(/,/g, "");
     if (!candidates.includes(cleaned)) {
       candidates.push(cleaned);
+    }
+    if (!(cleaned in amountContexts)) {
+      amountContexts[cleaned] = classifyAmountContext(rawText, match.index);
     }
   }
   const amountKobo = candidates.length > 0 ? parseNairaStringToKobo(candidates[0]) : null;
@@ -168,8 +196,10 @@ export function parseLocallyOffline(
       parser: "offline-regex-v2",
       multiple_amounts_detected: candidates.length > 1,
       candidate_amounts_ngn: candidates,
+      amount_contexts: amountContexts,
       transaction_direction: transactionDirection,
       ambiguous_status_detected: ambiguousStatus,
+      ambiguous_date_detected: isAmbiguousDate(transactionDate),
       candidate_statuses: outcomeStatuses,
     },
     disclaimer:

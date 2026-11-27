@@ -62,6 +62,33 @@ def _validate_date_token(token: str | None) -> str | None:
     return None
 
 
+def _is_ambiguous_date(token: str | None) -> bool:
+    if not token:
+        return False
+    date_part = re.split(r"[T ]", token, maxsplit=1)[0]
+    match = re.match(r"^(\d{2})[/-](\d{2})/\d{4}$|^(\d{2})-(\d{2})-\d{4}$", date_part)
+    if not match:
+        return False
+    first = int(match.group(1) or match.group(3))
+    second = int(match.group(2) or match.group(4))
+    return first <= 12 and second <= 12 and first != second
+
+
+def _classify_amount_context(raw_text: str, start_idx: int) -> str:
+    prefix = raw_text[max(0, start_idx - 40) : start_idx].lower()
+    if re.search(r"\b(?:avail(?:able)?\s*bal(?:ance)?)\b", prefix):
+        return "Available Balance"
+    if re.search(r"\b(?:new\s+balance|current\s+balance|balance|bal)\b", prefix):
+        return "Balance"
+    if re.search(r"\b(?:fee|charge|vat|commission)\b", prefix):
+        return "Fee"
+    if re.search(r"\brefund\b", prefix):
+        return "Refund"
+    if re.search(r"\b(?:amt|amount|debit|debited|credit|credited|transfer|purchase)\b", prefix):
+        return "Amount"
+    return "Other"
+
+
 def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     """Deterministically extract candidate transaction fields from pasted alert/receipt text.
 
@@ -69,11 +96,13 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     """
     amount_kobo: int | None = None
     candidate_amounts_ngn: list[str] = []
-    all_amounts = _AMOUNT_PATTERN.findall(raw_text)
-    for raw_num in all_amounts:
-        cleaned_num = raw_num.replace(",", "")
+    amount_contexts: dict[str, str] = {}
+    for amt_match in _AMOUNT_PATTERN.finditer(raw_text):
+        cleaned_num = amt_match.group(1).replace(",", "")
         if cleaned_num not in candidate_amounts_ngn:
             candidate_amounts_ngn.append(cleaned_num)
+        if cleaned_num not in amount_contexts:
+            amount_contexts[cleaned_num] = _classify_amount_context(raw_text, amt_match.start())
 
     amount_match = _AMOUNT_PATTERN.search(raw_text)
     if amount_match:
@@ -156,8 +185,10 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
             "matched_amount_token": amount_match.group(0) if amount_match else None,
             "multiple_amounts_detected": len(candidate_amounts_ngn) > 1,
             "candidate_amounts_ngn": candidate_amounts_ngn,
+            "amount_contexts": amount_contexts,
             "transaction_direction": transaction_direction,
             "ambiguous_status_detected": ambiguous_status,
+            "ambiguous_date_detected": _is_ambiguous_date(transaction_date),
             "candidate_statuses": outcome_statuses,
         },
     }

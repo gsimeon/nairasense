@@ -31,7 +31,9 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     const amountInput = page.getByLabel("Amount (NGN)");
     await expect(amountInput).toHaveValue("");
 
-    const candidateBtn = page.getByRole("button", { name: "₦5,000.00" });
+    const candidateBtn = page.getByRole("button", { name: "₦5,000.00 (Amount)" });
+    await expect(page.getByRole("button", { name: "₦50.00 (Fee)" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "₦25,000.00 (Available Balance)" })).toBeVisible();
     await expect(candidateBtn).toHaveAttribute("aria-pressed", "false");
     await candidateBtn.click();
     await expect(candidateBtn).toHaveAttribute("aria-pressed", "true");
@@ -380,6 +382,13 @@ test.describe("NairaSense Core & Reliability E2E", () => {
         offline.extracted_fields.ambiguous_status_detected,
         `${fx.name} parity ambiguous flag`,
       ).toBe(online.extracted_fields.ambiguous_status_detected);
+      expect(
+        offline.extracted_fields.ambiguous_date_detected,
+        `${fx.name} parity ambiguous date`,
+      ).toBe(online.extracted_fields.ambiguous_date_detected);
+      expect(offline.extracted_fields.amount_contexts, `${fx.name} parity amount contexts`).toEqual(
+        online.extracted_fields.amount_contexts,
+      );
       expect(offline.extracted_fields.candidate_statuses, `${fx.name} parity candidate statuses`).toEqual(
         online.extracted_fields.candidate_statuses,
       );

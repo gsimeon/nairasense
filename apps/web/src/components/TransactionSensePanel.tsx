@@ -245,6 +245,12 @@ export function TransactionSensePanel({
               outcome before saving.
             </p>
           )}
+          {Boolean(rawExtractedFields.ambiguous_date_detected) && (
+            <p className="prototype-warning" role="alert">
+              The extracted date format (day/month vs month/day) may be ambiguous. Please verify
+              the date before saving.
+            </p>
+          )}
           <form onSubmit={handleSave} className="review-form">
             {multipleAmountsDetected && (
               <div className="prototype-warning" role="group" aria-label="Choose transaction amount">
@@ -253,23 +259,32 @@ export function TransactionSensePanel({
                   transaction amount, enter it manually, or leave it blank:
                 </p>
                 <div className="actions">
-                  {candidateAmounts.map((cand) => (
-                    <button
-                      key={cand}
-                      type="button"
-                      aria-pressed={amountNaira === cand}
-                      className={amountNaira === cand ? "primary small-btn" : "secondary small-btn"}
-                      onClick={() => {
-                        setAmountNaira(cand);
-                        onAnnounce(
-                          `Selected ${Number(cand).toLocaleString("en-NG", { minimumFractionDigits: 2 })} Naira.`,
-                          true,
-                        );
-                      }}
-                    >
-                      ₦{Number(cand).toLocaleString("en-NG", { minimumFractionDigits: 2 })}
-                    </button>
-                  ))}
+                  {candidateAmounts.map((cand) => {
+                    const ctxMap =
+                      typeof rawExtractedFields.amount_contexts === "object" &&
+                      rawExtractedFields.amount_contexts !== null
+                        ? (rawExtractedFields.amount_contexts as Record<string, string>)
+                        : null;
+                    const ctxLabel = ctxMap?.[cand];
+                    return (
+                      <button
+                        key={cand}
+                        type="button"
+                        aria-pressed={amountNaira === cand}
+                        className={amountNaira === cand ? "primary small-btn" : "secondary small-btn"}
+                        onClick={() => {
+                          setAmountNaira(cand);
+                          onAnnounce(
+                            `Selected ${Number(cand).toLocaleString("en-NG", { minimumFractionDigits: 2 })} Naira${ctxLabel ? ` (${ctxLabel})` : ""}.`,
+                            true,
+                          );
+                        }}
+                      >
+                        ₦{Number(cand).toLocaleString("en-NG", { minimumFractionDigits: 2 })}
+                        {ctxLabel ? ` (${ctxLabel})` : ""}
+                      </button>
+                    );
+                  })}
                   <button
                     type="button"
                     aria-pressed={amountNaira === ""}

@@ -98,6 +98,31 @@ def test_direction_does_not_override_outcome() -> None:
         assert body["reported_status"] == expected_outcome, raw_text
 
 
+def test_ambiguous_date_and_amount_context_labels() -> None:
+    amb = client.post(
+        "/api/v1/transactions/extract",
+        json={"raw_text": "Debit NGN 5,000.00. Date: 03/04/2026. Successful.", "source_type": "notification"},
+    )
+    assert amb.status_code == 200
+    assert amb.json()["extracted_fields"]["ambiguous_date_detected"] is True
+
+    unamb = client.post(
+        "/api/v1/transactions/extract",
+        json={
+            "raw_text": "Debit NGN 5,000.00. Fee: NGN 50.00. Avail Bal: NGN 25,000.00. Date: 26/11/2026.",
+            "source_type": "notification",
+        },
+    )
+    assert unamb.status_code == 200
+    fields = unamb.json()["extracted_fields"]
+    assert fields["ambiguous_date_detected"] is False
+    assert fields["amount_contexts"] == {
+        "5000.00": "Amount",
+        "50.00": "Fee",
+        "25000.00": "Available Balance",
+    }
+
+
 def test_transaction_crud_lifecycle() -> None:
     reg = client.post(
         "/api/v1/auth/register",
