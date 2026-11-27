@@ -444,5 +444,17 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     await amtBtn.click();
     await expect(amtBtn).toHaveAttribute("aria-pressed", "true");
     await expect(feeBtn).toHaveAttribute("aria-pressed", "false");
+
+    // Manual amount entry and unknown amount both save cleanly
+    await page.getByLabel("Amount (NGN)").fill("1234.50");
+    await expect(amtBtn).toHaveAttribute("aria-pressed", "false");
+    await page.getByRole("button", { name: "Confirm & save record" }).click();
+    await expect(page.getByText("Saved transaction records (1)")).toBeVisible();
+
+    await page.getByLabel("Alert or receipt text").fill("Fee: NGN 50.00.");
+    await page.getByRole("button", { name: "Extract fields for review" }).click();
+    await page.getByRole("button", { name: "Leave unknown" }).click();
+    await page.getByRole("button", { name: "Confirm & save record" }).click();
+    await expect(page.getByText("Saved transaction records (2)")).toBeVisible();
   });
 });

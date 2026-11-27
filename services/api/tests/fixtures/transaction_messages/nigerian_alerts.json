@@ -686,5 +686,37 @@
       "multiple_amounts_detected": false,
       "ambiguous_status_detected": false
     }
+  },
+  {
+    "name": "fee_only_requires_confirmation",
+    "source_type": "notification",
+    "raw_text": "Fee: NGN 50.00. Ref: FEE-901.",
+    "expected": {
+      "amount_kobo": null,
+      "reported_status": null,
+      "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
+      "reference": "FEE-901",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
+  },
+  {
+    "name": "balance_only_requires_confirmation",
+    "source_type": "notification",
+    "raw_text": "Available Balance: NGN 25,000.00. Ref: BAL-902.",
+    "expected": {
+      "amount_kobo": null,
+      "reported_status": null,
+      "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
+      "reference": "BAL-902",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
   }
 ]

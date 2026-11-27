@@ -216,6 +216,41 @@ def test_ambiguous_date_requires_confirmation_on_create() -> None:
     )
     assert mismatch_res.status_code == 422
 
+    # Fabricated candidate ID rejected server-side
+    fabricated_res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_kobo": 50000,
+            "currency": "NGN",
+            "source_type": "notification",
+            "extracted_fields": {
+                "labeled_amounts": [{"id": "cand-1", "amount_ngn": "500.00", "context": "Fee"}],
+                "selected_candidate_id": "cand-999",
+            },
+            "user_confirmed": True,
+        },
+    )
+    assert fabricated_res.status_code == 422
+
+    # Candidate context mismatch rejected server-side
+    ctx_mismatch_res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_kobo": 50000,
+            "currency": "NGN",
+            "source_type": "notification",
+            "extracted_fields": {
+                "labeled_amounts": [{"id": "cand-1", "amount_ngn": "500.00", "context": "Fee"}],
+                "selected_candidate_id": "cand-1",
+                "selected_candidate_context": "Amount",
+            },
+            "user_confirmed": True,
+        },
+    )
+    assert ctx_mismatch_res.status_code == 422
+
     # Unknown amount and unknown date remain valid
     unknown_res = client.post(
         "/api/v1/transactions",
