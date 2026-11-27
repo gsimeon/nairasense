@@ -65,7 +65,7 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     transaction_date = date_match.group(1) if date_match else None
 
     lowered = raw_text.lower()
-    reported_status: str | None = None
+    matched_statuses: list[str] = []
     for keyword, label in (
         ("reversed", "Reversed"),
         ("reversal", "Reversed"),
@@ -80,9 +80,16 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
         ("success", "Successful"),
         ("approved", "Successful"),
     ):
-        if re.search(rf"\b{keyword}\b", lowered):
-            reported_status = label
-            break
+        if re.search(rf"\b{keyword}\b", lowered) and label not in matched_statuses:
+            matched_statuses.append(label)
+
+    # Flag contradictory outcome statuses (e.g. "Successful" alongside "Reversed"/"Failed"/"Pending")
+    outcome_statuses = [s for s in matched_statuses if s in ("Reversed", "Failed", "Pending", "Successful")]
+    ambiguous_status = len(outcome_statuses) > 1
+    if ambiguous_status:
+        reported_status = "Ambiguous (Review Required)"
+    else:
+        reported_status = matched_statuses[0] if matched_statuses else None
 
     return {
         "amount_kobo": amount_kobo,
@@ -96,5 +103,7 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
             "matched_amount_token": amount_match.group(0) if amount_match else None,
             "multiple_amounts_detected": len(candidate_amounts_ngn) > 1,
             "candidate_amounts_ngn": candidate_amounts_ngn,
+            "ambiguous_status_detected": ambiguous_status,
+            "candidate_statuses": matched_statuses,
         },
     }

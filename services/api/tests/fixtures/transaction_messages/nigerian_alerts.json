@@ -108,5 +108,16 @@
       "reference": "FAIL-991",
       "multiple_amounts_detected": false
     }
+  },
+  {
+    "name": "contradictory_successful_and_reversed",
+    "source_type": "notification",
+    "raw_text": "Transaction successful: NGN 4,500.00. Previous debit reversed. Ref: AMB-774.",
+    "expected": {
+      "amount_kobo": 450000,
+      "reported_status": "Ambiguous (Review Required)",
+      "reference": "AMB-774",
+      "multiple_amounts_detected": false
+    }
   }
 ]

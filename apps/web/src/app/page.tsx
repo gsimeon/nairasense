@@ -408,6 +408,8 @@ export default function HomePage() {
     confidence: number | null;
     confirmation_status: ConfirmationStatus;
   }) {
+    const epoch = accountEpochRef.current;
+    const targetNamespace = activeNamespace;
     const localId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
@@ -419,19 +421,23 @@ export default function HomePage() {
         if (!activeSession) {
           const session = await createCashSession();
           activeSession = session.id;
-          setSessionId(activeSession);
-          await setOfflineSessionId(activeNamespace, activeSession);
+          if (accountEpochRef.current === epoch) {
+            setSessionId(activeSession);
+          }
+          await setOfflineSessionId(targetNamespace, activeSession);
         }
         const created = await addCashEntryToApi(activeSession, input, localId);
         const syncedEntry: CashEntry = { ...created, synced: true };
-        setCashEntries((prev) => [...prev, syncedEntry]);
-        await saveOfflineCashEntry(activeNamespace, syncedEntry);
+        await saveOfflineCashEntry(targetNamespace, syncedEntry);
+        if (accountEpochRef.current === epoch) {
+          setCashEntries((prev) => [...prev, syncedEntry]);
+        }
         return;
       } catch {
         // Queue for durable retry when back online
         await enqueueSyncItem({
           id: localId,
-          namespace: activeNamespace,
+          namespace: targetNamespace,
           kind: "cash_entry",
           payload: input,
           attempts: 0,
@@ -439,7 +445,9 @@ export default function HomePage() {
           nextRetryAt: 0,
           created_at: new Date().toISOString(),
         });
-        setPendingSyncCount((c) => c + 1);
+        if (accountEpochRef.current === epoch) {
+          setPendingSyncCount((c) => c + 1);
+        }
       }
     }
 
@@ -453,8 +461,10 @@ export default function HomePage() {
       created_at: new Date().toISOString(),
       synced: false,
     };
-    setCashEntries((prev) => [...prev, offlineEntry]);
-    await saveOfflineCashEntry(activeNamespace, offlineEntry);
+    await saveOfflineCashEntry(targetNamespace, offlineEntry);
+    if (accountEpochRef.current === epoch) {
+      setCashEntries((prev) => [...prev, offlineEntry]);
+    }
   }
 
   async function handleDeleteCashEntry(entryId: string) {
@@ -526,6 +536,8 @@ export default function HomePage() {
     extracted_fields: Record<string, unknown>;
     user_confirmed: boolean;
   }) {
+    const epoch = accountEpochRef.current;
+    const targetNamespace = activeNamespace;
     const localId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
@@ -535,13 +547,15 @@ export default function HomePage() {
       try {
         const saved = await createTransactionInApi(payload, localId);
         const synced: TransactionRecord = { ...saved, synced: true };
-        setTransactions((prev) => [synced, ...prev]);
-        await saveOfflineTransaction(activeNamespace, synced);
+        await saveOfflineTransaction(targetNamespace, synced);
+        if (accountEpochRef.current === epoch) {
+          setTransactions((prev) => [synced, ...prev]);
+        }
         return;
       } catch {
         await enqueueSyncItem({
           id: localId,
-          namespace: activeNamespace,
+          namespace: targetNamespace,
           kind: "transaction",
           payload,
           attempts: 0,
@@ -549,7 +563,9 @@ export default function HomePage() {
           nextRetryAt: 0,
           created_at: new Date().toISOString(),
         });
-        setPendingSyncCount((c) => c + 1);
+        if (accountEpochRef.current === epoch) {
+          setPendingSyncCount((c) => c + 1);
+        }
       }
     }
 
@@ -561,8 +577,10 @@ export default function HomePage() {
       updated_at: now,
       synced: false,
     };
-    setTransactions((prev) => [offlineRecord, ...prev]);
-    await saveOfflineTransaction(activeNamespace, offlineRecord);
+    await saveOfflineTransaction(targetNamespace, offlineRecord);
+    if (accountEpochRef.current === epoch) {
+      setTransactions((prev) => [offlineRecord, ...prev]);
+    }
   }
 
   async function handleDeleteTransaction(id: string) {

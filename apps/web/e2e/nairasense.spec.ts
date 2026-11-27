@@ -152,4 +152,38 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     await expect(page.locator("p[role='alert']")).toContainText("Camera permission was denied");
     await expect(page.getByRole("button", { name: "+ ₦500" })).toBeVisible();
   });
+
+  test("Logout during in-flight entry write does not leak into next user", async ({ page }) => {
+    const suffix = Date.now();
+    const userA = `inflight_a_${suffix}`;
+    const userB = `inflight_b_${suffix}`;
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "Sign in / Sync" }).click();
+    await page.getByRole("button", { name: "Create account" }).first().click();
+    await page.getByLabel("Username").fill(userA);
+    await page.getByLabel("Password (8+ characters)").fill("password123");
+    await page.locator("form.auth-form button[type='submit']").click();
+    await expect(page.getByText(`Signed in: ${userA}`)).toBeVisible();
+
+    // Delay entry POST so User A logs out while request is in flight
+    await page.route("**/api/v1/cash/sessions/*/entries", async (route) => {
+      await new Promise((r) => setTimeout(r, 400));
+      await route.continue();
+    });
+
+    await page.getByRole("button", { name: "+ ₦500" }).click();
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.locator(".total-amount")).toHaveText("₦0");
+
+    // Sign in as User B immediately and verify User A's in-flight write does not leak
+    await page.getByRole("button", { name: "Sign in / Sync" }).click();
+    await page.getByRole("button", { name: "Create account" }).first().click();
+    await page.getByLabel("Username").fill(userB);
+    await page.getByLabel("Password (8+ characters)").fill("password123");
+    await page.locator("form.auth-form button[type='submit']").click();
+    await expect(page.getByText(`Signed in: ${userB}`)).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page.locator(".total-amount")).toHaveText("₦0");
+  });
 });
