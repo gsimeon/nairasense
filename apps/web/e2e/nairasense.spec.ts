@@ -341,6 +341,10 @@ test.describe("NairaSense Core & Reliability E2E", () => {
       expect(online.amount_kobo, `${fx.name} online amount`).toBe(fx.expected.amount_kobo);
       expect(offline.reported_status, `${fx.name} offline status`).toBe(fx.expected.reported_status);
       expect(online.reported_status, `${fx.name} online status`).toBe(fx.expected.reported_status);
+      expect(offline.reference, `${fx.name} parity reference`).toBe(online.reference);
+      expect(offline.sender_label, `${fx.name} parity sender`).toBe(online.sender_label);
+      expect(offline.recipient_label, `${fx.name} parity recipient`).toBe(online.recipient_label);
+      expect(offline.transaction_date, `${fx.name} parity date`).toBe(online.transaction_date);
       expect(offline.extracted_fields.transaction_direction, `${fx.name} offline direction`).toBe(
         fx.expected.transaction_direction,
       );
@@ -355,6 +359,16 @@ test.describe("NairaSense Core & Reliability E2E", () => {
         online.extracted_fields.multiple_amounts_detected,
         `${fx.name} online multi-amt`,
       ).toBe(fx.expected.multiple_amounts_detected);
+      expect(offline.extracted_fields.candidate_amounts_ngn, `${fx.name} parity amounts`).toEqual(
+        online.extracted_fields.candidate_amounts_ngn,
+      );
+      expect(
+        offline.extracted_fields.ambiguous_status_detected,
+        `${fx.name} parity ambiguous flag`,
+      ).toBe(online.extracted_fields.ambiguous_status_detected);
+      expect(offline.extracted_fields.candidate_statuses, `${fx.name} parity candidate statuses`).toEqual(
+        online.extracted_fields.candidate_statuses,
+      );
     }
 
     // Verify ambiguous outcome surfaces an explicit alert banner to assistive tech

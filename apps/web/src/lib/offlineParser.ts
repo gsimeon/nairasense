@@ -46,6 +46,20 @@ const OFFLINE_OUTCOME_RULES: Array<[RegExp, string]> = [
   [/\bcompleted\b/i, "Successful"],
 ];
 
+const FROM_PATTERN =
+  /(?:from|sender)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:to|recipient|beneficiary|ref|reference|date|amt|amount|status)\s*:|$))/i;
+const TO_PATTERN =
+  /(?:to|recipient|beneficiary)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:from|sender|ref|reference|date|amt|amount|status)\s*:|$))/i;
+const DATE_PATTERN =
+  /(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?|\d{2}\/\d{2}\/\d{4}|\d{2}-\d{2}-\d{4})/;
+
+function cleanLabel(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const first = raw.split(/[\r\n|;]+/)[0] ?? "";
+  const cleaned = first.replace(/^[\s.,:-]+|[\s.,:-]+$/g, "");
+  return cleaned || null;
+}
+
 export function parseLocallyOffline(
   rawText: string,
   sourceType: SourceType,
@@ -63,6 +77,12 @@ export function parseLocallyOffline(
   const refMatch = rawText.match(
     /(?:ref(?:erence)?|txn\s*id|session\s*id|trans(?:action)?\s*id)\s*[:#-]?\s*([A-Za-z0-9_-]{4,64})/i,
   );
+  const fromMatch = rawText.match(FROM_PATTERN);
+  const senderLabel = cleanLabel(fromMatch?.[1]);
+  const toMatch = rawText.match(TO_PATTERN);
+  const recipientLabel = cleanLabel(toMatch?.[1]);
+  const dateMatch = rawText.match(DATE_PATTERN);
+  const transactionDate = dateMatch?.[1] ?? null;
 
   const matchedDirections: string[] = [];
   for (const [pattern, label] of OFFLINE_DIRECTION_RULES) {
@@ -91,11 +111,11 @@ export function parseLocallyOffline(
 
   return {
     amount_kobo: amountKobo,
-    sender_label: null,
-    recipient_label: null,
+    sender_label: senderLabel,
+    recipient_label: recipientLabel,
     reference: refMatch?.[1] ?? null,
     reported_status: reportedStatus,
-    transaction_date: null,
+    transaction_date: transactionDate,
     source_type: sourceType,
     extracted_fields: {
       parser: "offline-regex-v2",
