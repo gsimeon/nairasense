@@ -128,6 +128,8 @@ p { margin: 8px 0 14px; }
 .total-amount { margin: 0; color: var(--teal); font-size: 2.4rem; font-weight: 800; }
 .change-box { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .change-result { margin-top: 8px; padding: 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.sync-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 12px 0; }
+.sync-grid dt, .sync-grid dd { margin: 0; }
 
 .entry-list { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 10px; }
 .entry-item, .tx-item {

@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -39,6 +42,23 @@ def test_extract_transaction_flags_multiple_amounts() -> None:
     fields = res.json()["extracted_fields"]
     assert fields["multiple_amounts_detected"] is True
     assert fields["candidate_amounts_ngn"] == ["5000.00", "50.00", "25000.00"]
+
+
+def test_nigerian_bank_message_fixtures() -> None:
+    fixtures_path = Path(__file__).parent / "fixtures" / "transaction_messages" / "nigerian_alerts.json"
+    cases = json.loads(fixtures_path.read_text(encoding="utf-8"))
+    for case in cases:
+        res = client.post(
+            "/api/v1/transactions/extract",
+            json={"raw_text": case["raw_text"], "source_type": case["source_type"]},
+        )
+        assert res.status_code == 200, case["name"]
+        data = res.json()
+        expected = case["expected"]
+        assert data["amount_kobo"] == expected["amount_kobo"], case["name"]
+        assert data["reported_status"] == expected["reported_status"], case["name"]
+        assert data["reference"] == expected["reference"], case["name"]
+        assert data["extracted_fields"]["multiple_amounts_detected"] is expected["multiple_amounts_detected"], case["name"]
 
 
 def test_transaction_crud_lifecycle() -> None:

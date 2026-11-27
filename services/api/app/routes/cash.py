@@ -4,7 +4,17 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+)
 
 from app.auth import AuthUser, get_current_user, get_optional_current_user
 from app.db import VALID_DENOMINATIONS, get_conn
@@ -187,13 +197,24 @@ def create_cash_session(
 
 @router.get("/sessions", response_model=list[CashSessionResponse])
 def list_cash_sessions(
+    response: Response,
     current_user: Annotated[AuthUser, Depends(get_current_user)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[CashSessionResponse]:
     with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT id FROM cash_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
+        total_row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM cash_sessions WHERE user_id = ?",
             (current_user.user_id,),
+        ).fetchone()
+        total = int(total_row["cnt"]) if total_row else 0
+        rows = conn.execute(
+            "SELECT id FROM cash_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (current_user.user_id, limit, offset),
         ).fetchall()
+    has_more = (offset + len(rows)) < total
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Has-More"] = "true" if has_more else "false"
     return [_load_session(row["id"], current_user.user_id) for row in rows]
 
 

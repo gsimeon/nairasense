@@ -113,8 +113,32 @@ export type CashSessionSummary = {
   entries: CashEntry[];
 };
 
-export async function listCashSessionsFromApi(): Promise<CashSessionSummary[]> {
-  return requestJson<CashSessionSummary[]>("/cash/sessions");
+export async function listAllCashSessionsFromApi(): Promise<CashSessionSummary[]> {
+  const all: CashSessionSummary[] = [];
+  const limit = 20;
+  let offset = 0;
+
+  while (true) {
+    const token = getStoredToken();
+    const response = await fetch(`${API_BASE}/cash/sessions?limit=${limit}&offset=${offset}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Request failed (${response.status})`);
+    }
+    const page = (await response.json()) as CashSessionSummary[];
+    all.push(...page);
+    const hasMoreHeader = response.headers.get("X-Has-More");
+    if (hasMoreHeader === "false" || page.length < limit) {
+      break;
+    }
+    offset += page.length;
+  }
+
+  return all;
 }
 
 export async function deleteCashSessionFromApi(sessionId: string): Promise<void> {

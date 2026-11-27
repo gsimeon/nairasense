@@ -1,0 +1,68 @@
+[
+  {
+    "name": "credit_alert_standard",
+    "source_type": "notification",
+    "raw_text": "Credit Alert! Amt: NGN 12,500.00. From: ADAOBI OKAFOR. To: CHIDI ENTERPRISE. Ref: TXN-994812. Date: 2026-11-26 14:22:00. Successful.",
+    "expected": {
+      "amount_kobo": 1250000,
+      "reported_status": "Credit",
+      "reference": "TXN-994812",
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "debit_with_fee_and_balance",
+    "source_type": "notification",
+    "raw_text": "Debit Alert: NGN 5,000.00. Fee: NGN 50.00. Avail Bal: NGN 25,000.00. Ref: GTB-441209. Date: 2026-11-26.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Debit",
+      "reference": "GTB-441209",
+      "multiple_amounts_detected": true
+    }
+  },
+  {
+    "name": "pos_receipt_successful",
+    "source_type": "receipt",
+    "raw_text": "POS PURCHASE APPROVED. Amount: ₦3,200.00. To: MAMA PUT KITCHEN. Ref: POS-88321. Date: 26/11/2026. Successful.",
+    "expected": {
+      "amount_kobo": 320000,
+      "reported_status": "Successful",
+      "reference": "POS-88321",
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "failed_transfer_missing_ref",
+    "source_type": "pasted_text",
+    "raw_text": "Transfer of NGN 15,000.00 to KEMI ADEYEMI Failed due to network timeout.",
+    "expected": {
+      "amount_kobo": 1500000,
+      "reported_status": "Failed",
+      "reference": null,
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "reversed_transaction_multi_amount",
+    "source_type": "notification",
+    "raw_text": "Reversal Alert: NGN 2,500.00 reversed. New Balance: NGN 18,450.50. Ref: REV-7710.",
+    "expected": {
+      "amount_kobo": 250000,
+      "reported_status": "Reversed",
+      "reference": "REV-7710",
+      "multiple_amounts_detected": true
+    }
+  },
+  {
+    "name": "pending_transfer",
+    "source_type": "pasted_text",
+    "raw_text": "Transfer Pending: NGN 8,000.00. From: SANI MUSA. To: AMINA BELLO. Ref: PEND-1029.",
+    "expected": {
+      "amount_kobo": 800000,
+      "reported_status": "Pending",
+      "reference": "PEND-1029",
+      "multiple_amounts_detected": false
+    }
+  }
+]

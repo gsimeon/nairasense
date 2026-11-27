@@ -30,18 +30,31 @@ function formatNairaFromKobo(kobo: number | null): string {
 }
 
 function parseLocallyOffline(rawText: string, sourceType: SourceType) {
-  const amtMatch = rawText.match(/(?:NGN|₦|N)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i);
-  const amountKobo = amtMatch ? Math.round(Number(amtMatch[1].replace(/,/g, "")) * 100) : null;
+  const amtRegex = /(?:NGN|₦|N)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/gi;
+  const candidates: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = amtRegex.exec(rawText)) !== null) {
+    const cleaned = match[1].replace(/,/g, "");
+    if (!candidates.includes(cleaned)) {
+      candidates.push(cleaned);
+    }
+  }
+  const amountKobo = candidates.length > 0 ? Math.round(Number(candidates[0]) * 100) : null;
   const refMatch = rawText.match(/(?:ref(?:erence)?|txn\s*id|session\s*id)\s*[:#-]?\s*([A-Za-z0-9_-]{4,64})/i);
   const statusMatch = rawText.match(/\b(credit|debit|successful|pending|failed|reversed)\b/i);
   return {
-    amount_kobo: Number.isFinite(amountKobo) ? amountKobo : null,
+    amount_kobo: amountKobo !== null && Number.isFinite(amountKobo) ? amountKobo : null,
     sender_label: null,
     recipient_label: null,
     reference: refMatch?.[1] ?? null,
     reported_status: statusMatch ? statusMatch[1] : null,
     transaction_date: null,
     source_type: sourceType,
+    extracted_fields: {
+      parser: "offline-regex-v2",
+      multiple_amounts_detected: candidates.length > 1,
+      candidate_amounts_ngn: candidates,
+    },
     disclaimer:
       "Extracted offline from text. This is not independent bank settlement verification.",
   };
@@ -60,6 +73,10 @@ export function TransactionSensePanel({
 
   const [reviewing, setReviewing] = useState(false);
   const [amountNaira, setAmountNaira] = useState("");
+  const [candidateAmounts, setCandidateAmounts] = useState<string[]>([]);
+  const [multipleAmountsDetected, setMultipleAmountsDetected] = useState(false);
+  const [rawExtractedFields, setRawExtractedFields] = useState<Record<string, unknown>>({});
+  const [suggestedAmountKobo, setSuggestedAmountKobo] = useState<number | null>(null);
   const [sender, setSender] = useState("");
   const [recipient, setRecipient] = useState("");
   const [reference, setReference] = useState("");
@@ -76,7 +93,23 @@ export function TransactionSensePanel({
       } catch {
         extracted = parseLocallyOffline(textToParse, type);
       }
-      setAmountNaira(extracted.amount_kobo !== null ? (extracted.amount_kobo / 100).toFixed(2) : "");
+      const fields = (extracted.extracted_fields ?? {}) as Record<string, unknown>;
+      const candidates = Array.isArray(fields.candidate_amounts_ngn)
+        ? fields.candidate_amounts_ngn.map(String)
+        : [];
+      const multiAmt = Boolean(fields.multiple_amounts_detected) && candidates.length > 1;
+
+      setCandidateAmounts(candidates);
+      setMultipleAmountsDetected(multiAmt);
+      setRawExtractedFields(fields);
+      setSuggestedAmountKobo(extracted.amount_kobo);
+
+      // Do NOT silently pre-fill when multiple amounts are detected
+      setAmountNaira(
+        !multiAmt && extracted.amount_kobo !== null
+          ? (extracted.amount_kobo / 100).toFixed(2)
+          : "",
+      );
       setSender(extracted.sender_label ?? "");
       setRecipient(extracted.recipient_label ?? "");
       setReference(extracted.reference ?? "");
@@ -84,17 +117,13 @@ export function TransactionSensePanel({
       setTxDate(extracted.transaction_date ?? "");
       setDisclaimer(extracted.disclaimer);
       setReviewing(true);
-      const multiAmt = Boolean(
-        "extracted_fields" in extracted &&
-          extracted.extracted_fields &&
-          (extracted.extracted_fields as Record<string, unknown>).multiple_amounts_detected,
-      );
-      const spokenAmt =
-        extracted.amount_kobo !== null
+      const spokenAmt = multiAmt
+        ? "multiple amounts found; please select the transaction amount"
+        : extracted.amount_kobo !== null
           ? `${(extracted.amount_kobo / 100).toLocaleString("en-NG")} Naira`
           : "unknown amount";
       onAnnounce(
-        `Extracted ${extracted.reported_status ?? "transaction"} for ${spokenAmt}. ${multiAmt ? "Multiple amounts were found in this text—check the amount field carefully. " : ""}Review each field before saving.`,
+        `Extracted ${extracted.reported_status ?? "transaction"}: ${spokenAmt}. Review each field before saving.`,
         true,
       );
     } finally {
@@ -154,7 +183,13 @@ export function TransactionSensePanel({
       recipient_label: recipient.trim() || null,
       reported_status: reportedStatus.trim() || null,
       source_type: sourceType,
-      extracted_fields: { reviewed_in_ui: true },
+      extracted_fields: {
+        ...rawExtractedFields,
+        reviewed_in_ui: true,
+        suggested_amount_kobo: suggestedAmountKobo,
+        confirmed_amount_kobo: amountKobo,
+        user_selected_amount: amountKobo !== null,
+      },
       user_confirmed: true,
     });
     setReviewing(false);
@@ -230,6 +265,33 @@ export function TransactionSensePanel({
           <h2 id="tx-review-title">2. Review &amp; confirm fields</h2>
           {disclaimer && <p className="prototype-warning">{disclaimer}</p>}
           <form onSubmit={handleSave} className="review-form">
+            {multipleAmountsDetected && (
+              <div className="prototype-warning" role="group" aria-label="Choose transaction amount">
+                <p>
+                  Multiple amounts were detected in this message. Select which one is the
+                  transaction amount, enter it manually, or leave it blank:
+                </p>
+                <div className="actions">
+                  {candidateAmounts.map((cand) => (
+                    <button
+                      key={cand}
+                      type="button"
+                      className={amountNaira === cand ? "primary small-btn" : "secondary small-btn"}
+                      onClick={() => setAmountNaira(cand)}
+                    >
+                      ₦{Number(cand).toLocaleString("en-NG", { minimumFractionDigits: 2 })}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="secondary small-btn"
+                    onClick={() => setAmountNaira("")}
+                  >
+                    Leave unknown
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="field">
               <label htmlFor="tx-amount">Amount (NGN)</label>
               <input

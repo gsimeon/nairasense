@@ -187,6 +187,29 @@ def test_cash_entry_rejects_invalid_denomination() -> None:
     assert bad.status_code == 422
 
 
+def test_cash_sessions_pagination_restores_25_plus_sessions() -> None:
+    headers = _auth_headers("paginated_tester")
+    created_ids = []
+    for _ in range(25):
+        res = client.post("/api/v1/cash/sessions", headers=headers, json={"currency": "NGN"})
+        assert res.status_code == 201
+        created_ids.append(res.json()["id"])
+
+    page1 = client.get("/api/v1/cash/sessions?limit=20&offset=0", headers=headers)
+    assert page1.status_code == 200
+    assert len(page1.json()) == 20
+    assert page1.headers["x-total-count"] == "25"
+    assert page1.headers["x-has-more"] == "true"
+
+    page2 = client.get("/api/v1/cash/sessions?limit=20&offset=20", headers=headers)
+    assert page2.status_code == 200
+    assert len(page2.json()) == 5
+    assert page2.headers["x-has-more"] == "false"
+
+    fetched_ids = {s["id"] for s in page1.json()} | {s["id"] for s in page2.json()}
+    assert fetched_ids == set(created_ids)
+
+
 def test_parse_vision_payload_accepts_valid_and_abstains_on_invalid() -> None:
     from app.services.banknote_classifier import parse_vision_payload
 

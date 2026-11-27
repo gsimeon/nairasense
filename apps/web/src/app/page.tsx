@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthBar } from "@/components/AuthBar";
 import { CashSensePanel } from "@/components/CashSensePanel";
 import { PreferencesPanel } from "@/components/PreferencesPanel";
+import { SyncStatusPanel } from "@/components/SyncStatusPanel";
 import { TransactionSensePanel } from "@/components/TransactionSensePanel";
 import {
   addCashEntryToApi,
@@ -16,7 +17,7 @@ import {
   fetchCurrentUser,
   fetchPreferencesFromApi,
   getStoredToken,
-  listCashSessionsFromApi,
+  listAllCashSessionsFromApi,
   listTransactionsFromApi,
   savePreferencesToApi,
 } from "@/lib/api";
@@ -33,6 +34,7 @@ import {
   loadOfflineTransactions,
   loadSyncQueue,
   markSyncItemRetry,
+  PendingSyncItem,
   removeSyncItem,
   resetFailedSyncItems,
   saveOfflineCashEntry,
@@ -58,7 +60,8 @@ export default function HomePage() {
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [authUsername, setAuthUsername] = useState<string | null>(null);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
-  const [failedSyncCount, setFailedSyncCount] = useState(0);
+  const [failedItems, setFailedItems] = useState<PendingSyncItem[]>([]);
+  const [isOnline, setIsOnline] = useState(true);
   const [lastSyncedAt, setLastSyncedAtState] = useState<string | null>(null);
   const syncInFlightRef = useRef(false);
   const pendingResyncRef = useRef<{ userId: string; sessionId: string | null; epoch: number } | null>(
@@ -120,8 +123,8 @@ export default function HomePage() {
     }
   }, []);
 
-  const updateSyncCounters = useCallback((queue: { status?: string }[]) => {
-    setFailedSyncCount(queue.filter((i) => i.status === "failed").length);
+  const updateSyncCounters = useCallback((queue: PendingSyncItem[]) => {
+    setFailedItems(queue.filter((i) => i.status === "failed"));
     setPendingSyncCount(queue.filter((i) => i.status !== "failed").length);
   }, []);
 
@@ -269,7 +272,7 @@ export default function HomePage() {
         const [remotePrefs, remoteTx, remoteSessions, activeQueue] = await Promise.all([
           fetchPreferencesFromApi(),
           listTransactionsFromApi(),
-          listCashSessionsFromApi(),
+          listAllCashSessionsFromApi(),
           loadSyncQueue(ns),
         ]);
         if (accountEpochRef.current !== epoch) return;
@@ -286,24 +289,32 @@ export default function HomePage() {
           activeQueue.filter((q) => q.kind === "delete_transaction").map((q) => q.targetId),
         );
 
-        // Reconcile entries across all non-cleared remote sessions
+        // Reconcile entries across all non-cleared remote sessions and remove stale synced entries
         const visibleSessions = remoteSessions.filter((s) => !clearedSessionIds.has(s.id));
+        const allRemoteEntries = visibleSessions
+          .flatMap((s) => s.entries)
+          .filter((e) => !deletedEntryIds.has(e.id))
+          .map((e) => ({ ...e, synced: true }));
+        const remoteIds = new Set(allRemoteEntries.map((e) => e.id));
+
+        const currentLocalCash = await loadOfflineCashEntries(ns);
+        const staleSyncedEntries = currentLocalCash.filter(
+          (entry) => entry.synced && !remoteIds.has(entry.id),
+        );
+        const preservedLocalEntries = currentLocalCash.filter((entry) => !entry.synced);
+
+        await Promise.all(staleSyncedEntries.map((entry) => deleteOfflineCashEntry(entry.id)));
+        await Promise.all(allRemoteEntries.map((entry) => saveOfflineCashEntry(ns, entry)));
+
+        const reconciledCash = [
+          ...allRemoteEntries,
+          ...preservedLocalEntries.filter((u) => !remoteIds.has(u.id)),
+        ];
+        setCashEntries(reconciledCash);
+
         if (visibleSessions.length > 0) {
-          const latest = visibleSessions[0];
-          setSessionId(latest.id);
-          await setOfflineSessionId(ns, latest.id);
-          const allRemoteEntries = visibleSessions
-            .flatMap((s) => s.entries)
-            .filter((e) => !deletedEntryIds.has(e.id))
-            .map((e) => ({ ...e, synced: true }));
-          const currentLocalCash = await loadOfflineCashEntries(ns);
-          const unsyncedCash = currentLocalCash.filter((e) => !e.synced);
-          const mergedCash = [
-            ...allRemoteEntries,
-            ...unsyncedCash.filter((u) => !allRemoteEntries.some((r) => r.id === u.id)),
-          ];
-          setCashEntries(mergedCash);
-          await Promise.all(allRemoteEntries.map((e) => saveOfflineCashEntry(ns, e)));
+          setSessionId(visibleSessions[0].id);
+          await setOfflineSessionId(ns, visibleSessions[0].id);
         } else if (!storedSessionId) {
           const session = await createCashSession();
           if (accountEpochRef.current !== epoch) return;
@@ -363,15 +374,23 @@ export default function HomePage() {
     };
   }, [loadAccountState]);
 
-  // Flush sync queue automatically when browser regains connectivity
+  // Track browser online/offline state and flush sync queue on reconnect
   useEffect(() => {
-    if (!authUserId) return;
-    const epoch = accountEpochRef.current;
-    const handleOnline = () => {
-      void flushSyncQueue(authUserId, sessionId, epoch);
+    if (typeof window === "undefined") return;
+    setIsOnline(navigator.onLine);
+    const onOnline = () => {
+      setIsOnline(true);
+      if (authUserId) {
+        void flushSyncQueue(authUserId, sessionId, accountEpochRef.current);
+      }
     };
-    window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
   }, [authUserId, flushSyncQueue, sessionId]);
 
   async function handleAddCashEntry(input: {
@@ -575,8 +594,8 @@ export default function HomePage() {
 
   const syncLabel = !authUserId
     ? "Local-only mode"
-    : failedSyncCount > 0
-      ? `${failedSyncCount} sync failed`
+    : failedItems.length > 0
+      ? `${failedItems.length} sync failed`
       : pendingSyncCount > 0
         ? `${pendingSyncCount} pending sync`
         : "Synced";
@@ -600,7 +619,7 @@ export default function HomePage() {
             >
               {syncLabel}
             </span>
-            {authUserId && failedSyncCount > 0 && (
+            {authUserId && failedItems.length > 0 && (
               <button
                 type="button"
                 className="secondary small-btn"
@@ -744,6 +763,21 @@ export default function HomePage() {
               }
             />
           )}
+
+          <SyncStatusPanel
+            isAuthenticated={Boolean(authUserId)}
+            isOnline={isOnline}
+            pendingCount={pendingSyncCount}
+            failedItems={failedItems}
+            lastSyncedAt={lastSyncedAt}
+            onRetryFailed={async () => {
+              if (!authUserId) return;
+              await resetFailedSyncItems(authUserId);
+              await flushSyncQueue(authUserId, sessionId, accountEpochRef.current);
+              announce("Retrying failed sync records.", true);
+            }}
+            onAnnounce={announce}
+          />
 
           <p className="status" role="status" aria-live="polite">
             {status}
