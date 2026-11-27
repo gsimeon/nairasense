@@ -82,7 +82,7 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
         transaction_direction = matched_directions[0] if matched_directions else None
 
     outcome_text = re.sub(
-        r"\b(?:not\s+(?:successful|success|approved)|unsuccessful)\b",
+        r"\b(?:not\s+(?:successful|success|approved|completed)|unsuccessful)\b",
         " failed ",
         lowered,
     )
@@ -98,6 +98,7 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
         ("successful", "Successful"),
         ("success", "Successful"),
         ("approved", "Successful"),
+        ("completed", "Successful"),
     ):
         if re.search(rf"\b{keyword}\b", outcome_text) and label not in outcome_statuses:
             outcome_statuses.append(label)

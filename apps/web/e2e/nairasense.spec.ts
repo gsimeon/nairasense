@@ -1,4 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { parseLocallyOffline, SourceType } from "../src/lib/offlineParser";
 
 test.describe("NairaSense Core & Reliability E2E", () => {
   test("CashSense deterministic totals and change calculation", async ({ page }) => {
@@ -302,5 +305,67 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     await page.getByRole("button", { name: "Extract fields for review" }).click();
     await expect(page.getByLabel("Reported outcome")).toHaveValue("Failed");
     await context.setOffline(false);
+  });
+
+  test("Online and offline parsers match across all shared Nigerian bank fixtures and alert on ambiguity", async ({
+    page,
+    request,
+  }) => {
+    const fixturesPath = path.resolve(
+      __dirname,
+      "../../../services/api/tests/fixtures/transaction_messages/nigerian_alerts.json",
+    );
+    const fixtures = JSON.parse(fs.readFileSync(fixturesPath, "utf-8")) as Array<{
+      name: string;
+      source_type: SourceType;
+      raw_text: string;
+      expected: {
+        amount_kobo: number | null;
+        reported_status: string | null;
+        transaction_direction: string | null;
+        reference: string | null;
+        multiple_amounts_detected: boolean;
+      };
+    }>;
+
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
+    for (const fx of fixtures) {
+      const offline = parseLocallyOffline(fx.raw_text, fx.source_type);
+      const apiRes = await request.post(`${apiBase}/transactions/extract`, {
+        data: { raw_text: fx.raw_text, source_type: fx.source_type },
+      });
+      expect(apiRes.status(), fx.name).toBe(200);
+      const online = await apiRes.json();
+
+      expect(offline.amount_kobo, `${fx.name} offline amount`).toBe(fx.expected.amount_kobo);
+      expect(online.amount_kobo, `${fx.name} online amount`).toBe(fx.expected.amount_kobo);
+      expect(offline.reported_status, `${fx.name} offline status`).toBe(fx.expected.reported_status);
+      expect(online.reported_status, `${fx.name} online status`).toBe(fx.expected.reported_status);
+      expect(offline.extracted_fields.transaction_direction, `${fx.name} offline direction`).toBe(
+        fx.expected.transaction_direction,
+      );
+      expect(online.extracted_fields.transaction_direction, `${fx.name} online direction`).toBe(
+        fx.expected.transaction_direction,
+      );
+      expect(
+        offline.extracted_fields.multiple_amounts_detected,
+        `${fx.name} offline multi-amt`,
+      ).toBe(fx.expected.multiple_amounts_detected);
+      expect(
+        online.extracted_fields.multiple_amounts_detected,
+        `${fx.name} online multi-amt`,
+      ).toBe(fx.expected.multiple_amounts_detected);
+    }
+
+    // Verify ambiguous outcome surfaces an explicit alert banner to assistive tech
+    await page.goto("/");
+    await page.getByRole("tab", { name: "TransactionSense" }).click();
+    await page
+      .getByLabel("Alert or receipt text")
+      .fill("Debit NGN 5,000.00 successful, but reversal pending.");
+    await page.getByRole("button", { name: "Extract fields for review" }).click();
+    await expect(page.locator("#panel-transactions p[role='alert']")).toContainText(
+      "Conflicting outcome words were detected",
+    );
   });
 });

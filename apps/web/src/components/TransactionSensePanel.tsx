@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createWorker } from "tesseract.js";
 
 import { extractTransactionText } from "@/lib/api";
+import { parseLocallyOffline } from "@/lib/offlineParser";
 import { SourceType, TransactionRecord } from "@/lib/types";
 
 type TransactionSensePanelProps = {
@@ -27,92 +28,6 @@ type TransactionSensePanelProps = {
 function formatNairaFromKobo(kobo: number | null): string {
   if (kobo === null) return "Amount not specified";
   return `₦${(kobo / 100).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function parseNairaStringToKobo(raw: string): number | null {
-  const cleaned = raw.replace(/,/g, "").trim();
-  if (!/^\d+(?:\.\d{1,2})?$/.test(cleaned)) return null;
-  const [whole, frac = ""] = cleaned.split(".");
-  const kobo = Number(whole) * 100 + Number(frac.padEnd(2, "0"));
-  return Number.isSafeInteger(kobo) ? kobo : null;
-}
-
-const OFFLINE_DIRECTION_RULES: Array<[RegExp, string]> = [
-  [/\bcredit\b/i, "Credit"],
-  [/\bcredited\b/i, "Credit"],
-  [/\bdebit\b/i, "Debit"],
-  [/\bdebited\b/i, "Debit"],
-];
-
-const OFFLINE_OUTCOME_RULES: Array<[RegExp, string]> = [
-  [/\breversed\b/i, "Reversed"],
-  [/\breversal\b/i, "Reversed"],
-  [/\bfailed\b/i, "Failed"],
-  [/\bdeclined\b/i, "Failed"],
-  [/\bpending\b/i, "Pending"],
-  [/\bsuccessful\b/i, "Successful"],
-  [/\bsuccess\b/i, "Successful"],
-  [/\bapproved\b/i, "Successful"],
-];
-
-function parseLocallyOffline(rawText: string, sourceType: SourceType) {
-  const amtRegex = /(?:NGN|₦|N)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/gi;
-  const candidates: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = amtRegex.exec(rawText)) !== null) {
-    const cleaned = match[1].replace(/,/g, "");
-    if (!candidates.includes(cleaned)) {
-      candidates.push(cleaned);
-    }
-  }
-  const amountKobo = candidates.length > 0 ? parseNairaStringToKobo(candidates[0]) : null;
-  const refMatch = rawText.match(
-    /(?:ref(?:erence)?|txn\s*id|session\s*id|trans(?:action)?\s*id)\s*[:#-]?\s*([A-Za-z0-9_-]{4,64})/i,
-  );
-
-  const matchedDirections: string[] = [];
-  for (const [pattern, label] of OFFLINE_DIRECTION_RULES) {
-    if (pattern.test(rawText) && !matchedDirections.includes(label)) {
-      matchedDirections.push(label);
-    }
-  }
-  const transactionDirection =
-    matchedDirections.length > 1 ? "Ambiguous" : matchedDirections[0] ?? null;
-
-  const outcomeText = rawText
-    .replace(/\b(?:not\s+(?:successful|success|approved)|unsuccessful)\b/gi, " failed ")
-    .replace(/\bnot\s+(?:reversed|reversal)\b/gi, " not_reversed ")
-    .replace(/\bnot\s+(?:failed|declined)\b/gi, " not_failed ");
-  const outcomeStatuses: string[] = [];
-  for (const [pattern, label] of OFFLINE_OUTCOME_RULES) {
-    if (pattern.test(outcomeText) && !outcomeStatuses.includes(label)) {
-      outcomeStatuses.push(label);
-    }
-  }
-  const ambiguousStatus = outcomeStatuses.length > 1;
-  const reportedStatus = ambiguousStatus
-    ? "Ambiguous (Review Required)"
-    : outcomeStatuses[0] ?? null;
-
-  return {
-    amount_kobo: amountKobo,
-    sender_label: null,
-    recipient_label: null,
-    reference: refMatch?.[1] ?? null,
-    reported_status: reportedStatus,
-    transaction_date: null,
-    source_type: sourceType,
-    extracted_fields: {
-      parser: "offline-regex-v2",
-      multiple_amounts_detected: candidates.length > 1,
-      candidate_amounts_ngn: candidates,
-      transaction_direction: transactionDirection,
-      ambiguous_status_detected: ambiguousStatus,
-      candidate_statuses: outcomeStatuses,
-    },
-    disclaimer:
-      "Extracted offline from text. This is not independent bank settlement verification.",
-  };
 }
 
 export function TransactionSensePanel({

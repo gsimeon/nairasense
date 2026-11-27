@@ -250,5 +250,53 @@
       "reference": "RFP-603",
       "multiple_amounts_detected": false
     }
+  },
+  {
+    "name": "refund_completed_single_outcome",
+    "source_type": "notification",
+    "raw_text": "Refund completed for NGN 1,500.00. Ref: RFC-604.",
+    "expected": {
+      "amount_kobo": 150000,
+      "reported_status": "Successful",
+      "transaction_direction": null,
+      "reference": "RFC-604",
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "reversal_not_successful_ambiguous",
+    "source_type": "notification",
+    "raw_text": "Reversal not successful for NGN 2,000.00. Ref: RNS-605.",
+    "expected": {
+      "amount_kobo": 200000,
+      "reported_status": "Ambiguous (Review Required)",
+      "transaction_direction": null,
+      "reference": "RNS-605",
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "debit_successful_but_reversal_pending",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00 successful, but reversal pending. Ref: DSP-606.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Ambiguous (Review Required)",
+      "transaction_direction": "Debit",
+      "reference": "DSP-606",
+      "multiple_amounts_detected": false
+    }
+  },
+  {
+    "name": "transaction_failed_but_account_debited",
+    "source_type": "notification",
+    "raw_text": "Transaction failed for NGN 3,200.00, but account was debited. Ref: TFD-607.",
+    "expected": {
+      "amount_kobo": 320000,
+      "reported_status": "Failed",
+      "transaction_direction": "Debit",
+      "reference": "TFD-607",
+      "multiple_amounts_detected": false
+    }
   }
 ]
