@@ -59,8 +59,12 @@ def test_nigerian_bank_message_fixtures() -> None:
         assert data["amount_kobo"] == expected["amount_kobo"], case["name"]
         assert data["reported_status"] == expected["reported_status"], case["name"]
         assert data["extracted_fields"]["transaction_direction"] == expected["transaction_direction"], case["name"]
+        assert data["sender_label"] == expected["sender_label"], case["name"]
+        assert data["recipient_label"] == expected["recipient_label"], case["name"]
+        assert data["transaction_date"] == expected["transaction_date"], case["name"]
         assert data["reference"] == expected["reference"], case["name"]
         assert data["extracted_fields"]["multiple_amounts_detected"] is expected["multiple_amounts_detected"], case["name"]
+        assert data["extracted_fields"]["ambiguous_status_detected"] is expected["ambiguous_status_detected"], case["name"]
 
 
 def test_direction_does_not_override_outcome() -> None:

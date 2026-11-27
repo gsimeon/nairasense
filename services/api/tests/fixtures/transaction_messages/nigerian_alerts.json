@@ -7,8 +7,12 @@
       "amount_kobo": 1250000,
       "reported_status": "Successful",
       "transaction_direction": "Credit",
+      "sender_label": "ADAOBI OKAFOR",
+      "recipient_label": "CHIDI ENTERPRISE",
+      "transaction_date": "2026-11-26 14:22:00",
       "reference": "TXN-994812",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -19,8 +23,12 @@
       "amount_kobo": 500000,
       "reported_status": null,
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": "2026-11-26",
       "reference": "GTB-441209",
-      "multiple_amounts_detected": true
+      "multiple_amounts_detected": true,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -31,8 +39,12 @@
       "amount_kobo": 320000,
       "reported_status": "Successful",
       "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": "MAMA PUT KITCHEN",
+      "transaction_date": "26/11/2026",
       "reference": "POS-88321",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -43,8 +55,12 @@
       "amount_kobo": 1500000,
       "reported_status": "Failed",
       "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": "KEMI ADEYEMI Failed due to network timeout",
+      "transaction_date": null,
       "reference": null,
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -55,8 +71,12 @@
       "amount_kobo": 250000,
       "reported_status": "Reversed",
       "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "REV-7710",
-      "multiple_amounts_detected": true
+      "multiple_amounts_detected": true,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -67,8 +87,12 @@
       "amount_kobo": 800000,
       "reported_status": "Pending",
       "transaction_direction": null,
+      "sender_label": "SANI MUSA",
+      "recipient_label": "AMINA BELLO",
+      "transaction_date": null,
       "reference": "PEND-1029",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -79,8 +103,12 @@
       "amount_kobo": 5250,
       "reported_status": null,
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": null,
-      "multiple_amounts_detected": true
+      "multiple_amounts_detected": true,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -91,8 +119,12 @@
       "amount_kobo": 2000000,
       "reported_status": null,
       "transaction_direction": "Credit",
+      "sender_label": "BOLA",
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "NIP-55123",
-      "multiple_amounts_detected": true
+      "multiple_amounts_detected": true,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -103,8 +135,12 @@
       "amount_kobo": 500000,
       "reported_status": "Reversed",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "REV-8821",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -115,8 +151,12 @@
       "amount_kobo": 200000,
       "reported_status": "Failed",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "FAIL-991",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -127,8 +167,12 @@
       "amount_kobo": 500000,
       "reported_status": "Successful",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "DEB-500",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -139,8 +183,12 @@
       "amount_kobo": 450000,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "AMB-774",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": true
     }
   },
   {
@@ -151,8 +199,12 @@
       "amount_kobo": 750000,
       "reported_status": "Failed",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "DEC-301",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -163,8 +215,12 @@
       "amount_kobo": 300000,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "MUL-902",
-      "multiple_amounts_detected": true
+      "multiple_amounts_detected": true,
+      "ambiguous_status_detected": true
     }
   },
   {
@@ -175,8 +231,12 @@
       "amount_kobo": 1825000,
       "reported_status": "Successful",
       "transaction_direction": "Credit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "GTB-77182",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -187,8 +247,12 @@
       "amount_kobo": 500000,
       "reported_status": "Failed",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "NEG-101",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -199,8 +263,12 @@
       "amount_kobo": 350000,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "RVP-204",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": true
     }
   },
   {
@@ -211,8 +279,12 @@
       "amount_kobo": 400000,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "DRP-505",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": true
     }
   },
   {
@@ -223,8 +295,12 @@
       "amount_kobo": 500000,
       "reported_status": "Failed",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "NRV-601",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -235,8 +311,12 @@
       "amount_kobo": 250000,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "RVF-602",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": true
     }
   },
   {
@@ -247,8 +327,12 @@
       "amount_kobo": 120000,
       "reported_status": "Pending",
       "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "RFP-603",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -259,8 +343,12 @@
       "amount_kobo": 150000,
       "reported_status": "Successful",
       "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "RFC-604",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -271,8 +359,12 @@
       "amount_kobo": 200000,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "RNS-605",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": true
     }
   },
   {
@@ -283,8 +375,12 @@
       "amount_kobo": 500000,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "DSP-606",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": true
     }
   },
   {
@@ -295,8 +391,12 @@
       "amount_kobo": 320000,
       "reported_status": "Failed",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "TFD-607",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
     }
   },
   {
@@ -307,8 +407,12 @@
       "amount_kobo": 500000,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "DSR-608",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": true
     }
   },
   {
@@ -319,8 +423,44 @@
       "amount_kobo": 300000,
       "reported_status": "Reversed",
       "transaction_direction": null,
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
       "reference": "PTR-609",
-      "multiple_amounts_detected": false
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
+  },
+  {
+    "name": "invalid_calendar_date_rejected",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00. Date: 2026-13-45. Ref: INV-701. Successful.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Successful",
+      "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
+      "reference": "INV-701",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
+  },
+  {
+    "name": "multiple_amounts_and_references",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00. Fee: NGN 50.00. Avail Bal: NGN 25,000.00. Ref: GTB-441209. Session ID: SESS-9981.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": null,
+      "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
+      "reference": "GTB-441209",
+      "multiple_amounts_detected": true,
+      "ambiguous_status_detected": false
     }
   }
 ]

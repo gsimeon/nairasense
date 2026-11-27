@@ -60,6 +60,28 @@ function cleanLabel(raw: string | undefined): string | null {
   return cleaned || null;
 }
 
+function validateDateToken(token: string | undefined): string | null {
+  if (!token) return null;
+  const datePart = token.split(/[T ]/)[0] ?? "";
+  let year: number;
+  let month: number;
+  let day: number;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+    [year, month, day] = datePart.split("-").map(Number);
+  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(datePart)) {
+    [day, month, year] = datePart.split("/").map(Number);
+  } else if (/^\d{2}-\d{2}-\d{4}$/.test(datePart)) {
+    [day, month, year] = datePart.split("-").map(Number);
+  } else {
+    return null;
+  }
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) {
+    return null;
+  }
+  return token;
+}
+
 export function parseLocallyOffline(
   rawText: string,
   sourceType: SourceType,
@@ -82,7 +104,7 @@ export function parseLocallyOffline(
   const toMatch = rawText.match(TO_PATTERN);
   const recipientLabel = cleanLabel(toMatch?.[1]);
   const dateMatch = rawText.match(DATE_PATTERN);
-  const transactionDate = dateMatch?.[1] ?? null;
+  const transactionDate = validateDateToken(dateMatch?.[1]);
 
   const matchedDirections: string[] = [];
   for (const [pattern, label] of OFFLINE_DIRECTION_RULES) {

@@ -323,8 +323,12 @@ test.describe("NairaSense Core & Reliability E2E", () => {
         amount_kobo: number | null;
         reported_status: string | null;
         transaction_direction: string | null;
+        sender_label: string | null;
+        recipient_label: string | null;
+        transaction_date: string | null;
         reference: string | null;
         multiple_amounts_detected: boolean;
+        ambiguous_status_detected: boolean;
       };
     }>;
 
@@ -341,10 +345,20 @@ test.describe("NairaSense Core & Reliability E2E", () => {
       expect(online.amount_kobo, `${fx.name} online amount`).toBe(fx.expected.amount_kobo);
       expect(offline.reported_status, `${fx.name} offline status`).toBe(fx.expected.reported_status);
       expect(online.reported_status, `${fx.name} online status`).toBe(fx.expected.reported_status);
-      expect(offline.reference, `${fx.name} parity reference`).toBe(online.reference);
-      expect(offline.sender_label, `${fx.name} parity sender`).toBe(online.sender_label);
-      expect(offline.recipient_label, `${fx.name} parity recipient`).toBe(online.recipient_label);
-      expect(offline.transaction_date, `${fx.name} parity date`).toBe(online.transaction_date);
+      expect(offline.reference, `${fx.name} offline reference`).toBe(fx.expected.reference);
+      expect(online.reference, `${fx.name} online reference`).toBe(fx.expected.reference);
+      expect(offline.sender_label, `${fx.name} offline sender`).toBe(fx.expected.sender_label);
+      expect(online.sender_label, `${fx.name} online sender`).toBe(fx.expected.sender_label);
+      expect(offline.recipient_label, `${fx.name} offline recipient`).toBe(fx.expected.recipient_label);
+      expect(online.recipient_label, `${fx.name} online recipient`).toBe(fx.expected.recipient_label);
+      expect(offline.transaction_date, `${fx.name} offline date`).toBe(fx.expected.transaction_date);
+      expect(online.transaction_date, `${fx.name} online date`).toBe(fx.expected.transaction_date);
+      expect(offline.extracted_fields.ambiguous_status_detected, `${fx.name} offline ambiguous`).toBe(
+        fx.expected.ambiguous_status_detected,
+      );
+      expect(online.extracted_fields.ambiguous_status_detected, `${fx.name} online ambiguous`).toBe(
+        fx.expected.ambiguous_status_detected,
+      );
       expect(offline.extracted_fields.transaction_direction, `${fx.name} offline direction`).toBe(
         fx.expected.transaction_direction,
       );

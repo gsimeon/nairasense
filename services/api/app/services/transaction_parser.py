@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -29,6 +30,19 @@ def _clean_label(raw: str | None) -> str | None:
     # Stop at common field delimiters or newlines
     cleaned = re.split(r"[\r\n|;]+", raw)[0].strip(" .,-:")
     return cleaned or None
+
+
+def _validate_date_token(token: str | None) -> str | None:
+    if not token:
+        return None
+    date_part = re.split(r"[T ]", token)[0]
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            datetime.strptime(date_part, fmt)
+            return token
+        except ValueError:
+            continue
+    return None
 
 
 def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
@@ -62,7 +76,7 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     recipient_label = _clean_label(to_match.group(1)) if to_match else None
 
     date_match = _DATE_PATTERN.search(raw_text)
-    transaction_date = date_match.group(1) if date_match else None
+    transaction_date = _validate_date_token(date_match.group(1) if date_match else None)
 
     lowered = raw_text.lower()
 
