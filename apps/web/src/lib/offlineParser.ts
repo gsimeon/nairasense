@@ -47,11 +47,11 @@ const OFFLINE_OUTCOME_RULES: Array<[RegExp, string]> = [
 ];
 
 const FROM_PATTERN =
-  /(?:from|sender)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:to|recipient|beneficiary|ref|reference|date|amt|amount|status)\s*:|\b(?:failed|declined|pending|reversed|successful|success|approved|completed|due\s+to)\b|$))/i;
+  /(?:from|sender)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:to|recipient|beneficiary|ref|reference|date|amt|amount|status)\s*:|\b(?:failed\s+due\s+to|declined\s+due\s+to|due\s+to|was\s+(?:failed|declined|pending|reversed|successful)|transaction\s+(?:failed|declined|pending|reversed|successful))\b|$))/i;
 const TO_PATTERN =
-  /(?:to|recipient|beneficiary)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:from|sender|ref|reference|date|amt|amount|status)\s*:|\b(?:failed|declined|pending|reversed|successful|success|approved|completed|due\s+to)\b|$))/i;
+  /(?:to|recipient|beneficiary)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:from|sender|ref|reference|date|amt|amount|status)\s*:|\b(?:failed\s+due\s+to|declined\s+due\s+to|due\s+to|was\s+(?:failed|declined|pending|reversed|successful)|transaction\s+(?:failed|declined|pending|reversed|successful))\b|$))/i;
 const DATE_PATTERN =
-  /(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?|\d{2}\/\d{2}\/\d{4}|\d{2}-\d{2}-\d{4})/;
+  /(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?)?|\d{2}\/\d{2}\/\d{4}|\d{2}-\d{2}-\d{4})/;
 
 function cleanLabel(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -67,12 +67,19 @@ function validateDateToken(token: string | undefined): string | null {
   const datePart = match[1] ?? "";
   const timePart = match[2];
   if (timePart !== undefined) {
-    const tMatch = timePart.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    const tMatch = timePart.match(
+      /^(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,6})?)?(Z|([+-])(\d{2}):(\d{2}))?$/,
+    );
     if (!tMatch) return null;
     const hh = Number(tMatch[1]);
     const mm = Number(tMatch[2]);
     const ss = tMatch[3] !== undefined ? Number(tMatch[3]) : 0;
     if (hh > 23 || mm > 59 || ss > 59) return null;
+    if (tMatch[5] !== undefined) {
+      const tzHh = Number(tMatch[6]);
+      const tzMm = Number(tMatch[7]);
+      if (tzHh > 23 || tzMm > 59) return null;
+    }
   }
   let year: number;
   let month: number;
@@ -126,8 +133,15 @@ export function parseLocallyOffline(
   const transactionDirection =
     matchedDirections.length > 1 ? "Ambiguous" : matchedDirections[0] ?? null;
 
-  const outcomeText = rawText
-    .replace(/\b(?:not\s+(?:successful|success|approved|completed)|unsuccessful)\b/gi, " failed ")
+  let outcomeText = rawText
+    .replace(/\b(?:not\s+(?:successful|success|approved|completed)|unsuccessful)\b/gi, " failed ");
+  if (senderLabel) {
+    outcomeText = outcomeText.split(senderLabel).join(" ");
+  }
+  if (recipientLabel) {
+    outcomeText = outcomeText.split(recipientLabel).join(" ");
+  }
+  outcomeText = outcomeText
     .replace(/\bnot\s+(?:reversed|reversal)\b/gi, " not_reversed ")
     .replace(/\bnot\s+(?:failed|declined)\b/gi, " not_failed ");
 

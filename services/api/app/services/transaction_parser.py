@@ -12,15 +12,15 @@ _REF_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _FROM_PATTERN = re.compile(
-    r"(?:from|sender)\s*[:\-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:to|recipient|beneficiary|ref|reference|date|amt|amount|status)\s*:|\b(?:failed|declined|pending|reversed|successful|success|approved|completed|due\s+to)\b|$))",
+    r"(?:from|sender)\s*[:\-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:to|recipient|beneficiary|ref|reference|date|amt|amount|status)\s*:|\b(?:failed\s+due\s+to|declined\s+due\s+to|due\s+to|was\s+(?:failed|declined|pending|reversed|successful)|transaction\s+(?:failed|declined|pending|reversed|successful))\b|$))",
     re.IGNORECASE,
 )
 _TO_PATTERN = re.compile(
-    r"(?:to|recipient|beneficiary)\s*[:\-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:from|sender|ref|reference|date|amt|amount|status)\s*:|\b(?:failed|declined|pending|reversed|successful|success|approved|completed|due\s+to)\b|$))",
+    r"(?:to|recipient|beneficiary)\s*[:\-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:from|sender|ref|reference|date|amt|amount|status)\s*:|\b(?:failed\s+due\s+to|declined\s+due\s+to|due\s+to|was\s+(?:failed|declined|pending|reversed|successful)|transaction\s+(?:failed|declined|pending|reversed|successful))\b|$))",
     re.IGNORECASE,
 )
 _DATE_PATTERN = re.compile(
-    r"(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?|\d{2}/\d{2}/\d{4}|\d{2}-\d{2}-\d{4})"
+    r"(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?)?|\d{2}/\d{2}/\d{4}|\d{2}-\d{2}-\d{4})"
 )
 
 
@@ -39,16 +39,20 @@ def _validate_date_token(token: str | None) -> str | None:
     date_part = parts[0]
     time_part = parts[1] if len(parts) > 1 else None
     if time_part is not None:
-        time_valid = False
-        for t_fmt in ("%H:%M:%S", "%H:%M"):
-            try:
-                datetime.strptime(time_part, t_fmt)
-                time_valid = True
-                break
-            except ValueError:
-                continue
-        if not time_valid:
+        t_match = re.match(
+            r"^(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,6})?)?(Z|([+-])(\d{2}):(\d{2}))?$",
+            time_part,
+        )
+        if not t_match:
             return None
+        hh, mm = int(t_match.group(1)), int(t_match.group(2))
+        ss = int(t_match.group(3)) if t_match.group(3) is not None else 0
+        if hh > 23 or mm > 59 or ss > 59:
+            return None
+        if t_match.group(5) is not None:
+            tz_hh, tz_mm = int(t_match.group(6)), int(t_match.group(7))
+            if tz_hh > 23 or tz_mm > 59:
+                return None
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
         try:
             datetime.strptime(date_part, fmt)
@@ -113,6 +117,10 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
         " failed ",
         lowered,
     )
+    if sender_label:
+        outcome_text = outcome_text.replace(sender_label.lower(), " ")
+    if recipient_label:
+        outcome_text = outcome_text.replace(recipient_label.lower(), " ")
     outcome_text = re.sub(r"\bnot\s+(?:reversed|reversal)\b", " not_reversed ", outcome_text)
     outcome_text = re.sub(r"\bnot\s+(?:failed|declined)\b", " not_failed ", outcome_text)
     outcome_statuses: list[str] = []
