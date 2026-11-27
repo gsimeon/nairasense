@@ -64,35 +64,35 @@ def extract_transaction(payload: TransactionExtractRequest) -> TransactionExtrac
     )
 
 
-@router.post("", response_model=TransactionResponse, status_code=201)
-def create_transaction(
-    payload: TransactionCreate,
-    current_user: Annotated[AuthUser, Depends(get_current_user)],
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
-) -> TransactionResponse:
-    if payload.transaction_date is not None and payload.transaction_date.strip():
-        clean_date = payload.transaction_date.strip()
+def _validate_transaction_state(
+    *,
+    amount_kobo: int | None,
+    transaction_date: str | None,
+    user_confirmed: bool,
+    extracted_fields: dict,
+) -> dict:
+    """Shared validation for both transaction creation and updates."""
+    fields = dict(extracted_fields)
+    if transaction_date is not None and transaction_date.strip():
+        clean_date = transaction_date.strip()
         if _validate_date_token(clean_date) is None:
             raise HTTPException(
                 status_code=422,
                 detail="Invalid transaction_date; expected a valid calendar date.",
             )
         if (
-            payload.user_confirmed
-            and (
-                _is_ambiguous_date(clean_date)
-                or payload.extracted_fields.get("ambiguous_date_detected") is True
-            )
-            and payload.extracted_fields.get("date_confirmed_by_user") is not True
+            user_confirmed
+            and (_is_ambiguous_date(clean_date) or fields.get("ambiguous_date_detected") is True)
+            and fields.get("date_confirmed_by_user") is not True
         ):
             raise HTTPException(
                 status_code=422,
                 detail="Ambiguous transaction date must be explicitly confirmed or cleared before saving.",
             )
 
-    selected_id = payload.extracted_fields.get("selected_candidate_id")
+    selected_id = fields.get("selected_candidate_id")
     if selected_id is not None:
-        labeled = payload.extracted_fields.get("labeled_amounts")
+        labeled = fields.get("labeled_amounts")
         if not isinstance(labeled, list):
             raise HTTPException(
                 status_code=422,
@@ -107,11 +107,11 @@ def create_transaction(
                 status_code=422,
                 detail="Selected amount candidate ID was not found in extracted candidates.",
             )
-        selected_ctx = payload.extracted_fields.get("selected_candidate_context")
-        if selected_ctx is not None and matched.get("context") != selected_ctx:
+        selected_ctx = fields.get("selected_candidate_context")
+        if not selected_ctx or matched.get("context") != selected_ctx:
             raise HTTPException(
                 status_code=422,
-                detail="Selected amount candidate context does not match extracted candidate.",
+                detail="Selected amount candidate context is required and must match extracted candidate.",
             )
         try:
             expected_kobo = int((Decimal(str(matched.get("amount_ngn", ""))) * 100).to_integral_value())
@@ -120,16 +120,31 @@ def create_transaction(
                 status_code=422,
                 detail="Invalid amount in selected candidate.",
             ) from exc
-        if payload.amount_kobo != expected_kobo:
+        if amount_kobo != expected_kobo:
             raise HTTPException(
                 status_code=422,
                 detail="Saved amount does not match the selected candidate amount.",
             )
-        payload.extracted_fields.setdefault("amount_entry_mode", "candidate_selected")
-    elif payload.amount_kobo is not None:
-        payload.extracted_fields.setdefault("amount_entry_mode", "manual")
+        fields["amount_entry_mode"] = "candidate_selected"
+    elif amount_kobo is not None:
+        fields["amount_entry_mode"] = "manual"
     else:
-        payload.extracted_fields.setdefault("amount_entry_mode", "unknown")
+        fields["amount_entry_mode"] = "unknown"
+    return fields
+
+
+@router.post("", response_model=TransactionResponse, status_code=201)
+def create_transaction(
+    payload: TransactionCreate,
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> TransactionResponse:
+    payload.extracted_fields = _validate_transaction_state(
+        amount_kobo=payload.amount_kobo,
+        transaction_date=payload.transaction_date,
+        user_confirmed=payload.user_confirmed,
+        extracted_fields=payload.extracted_fields,
+    )
 
     clean_key = idempotency_key.strip() if idempotency_key else None
     req_hash = (
@@ -250,6 +265,40 @@ def update_transaction(
         ).fetchone()
         if existing is None:
             raise HTTPException(status_code=404, detail="Transaction record not found.")
+
+        merged_amount = updates["amount_kobo"] if "amount_kobo" in updates else existing["amount_kobo"]
+        merged_date = (
+            updates["transaction_date"]
+            if "transaction_date" in updates
+            else existing["transaction_date"]
+        )
+        merged_confirmed = (
+            bool(updates["user_confirmed"])
+            if "user_confirmed" in updates
+            else bool(existing["user_confirmed"])
+        )
+        merged_fields = (
+            dict(updates["extracted_fields"])
+            if "extracted_fields" in updates and updates["extracted_fields"] is not None
+            else parse_json_dict(existing["extracted_fields"])
+        )
+
+        # If caller updates amount_kobo without supplying new candidate selection, clear stale candidate link
+        if "amount_kobo" in updates and "extracted_fields" not in updates:
+            merged_fields["selected_candidate_id"] = None
+            merged_fields["selected_candidate_context"] = None
+
+        # If caller changes transaction_date without supplying new extracted_fields, reset stale date confirmation
+        if "transaction_date" in updates and "extracted_fields" not in updates:
+            merged_fields["date_confirmed_by_user"] = False
+
+        validated_fields = _validate_transaction_state(
+            amount_kobo=merged_amount,
+            transaction_date=merged_date,
+            user_confirmed=merged_confirmed,
+            extracted_fields=merged_fields,
+        )
+        updates["extracted_fields"] = json.dumps(validated_fields)
 
         if "user_confirmed" in updates:
             updates["user_confirmed"] = 1 if updates["user_confirmed"] else 0

@@ -47,6 +47,7 @@ class TransactionUpdate(BaseModel):
     sender_label: str | None = Field(default=None, max_length=200)
     recipient_label: str | None = Field(default=None, max_length=200)
     reported_status: str | None = Field(default=None, max_length=120)
+    extracted_fields: dict[str, Any] | None = None
     user_confirmed: bool | None = None
 
 

@@ -260,6 +260,84 @@ def test_ambiguous_date_requires_confirmation_on_create() -> None:
     assert unknown_res.status_code == 201
     assert unknown_res.json()["extracted_fields"]["amount_entry_mode"] == "unknown"
 
+    # Candidate selection without context is rejected
+    no_ctx_res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_kobo": 50000,
+            "currency": "NGN",
+            "source_type": "notification",
+            "extracted_fields": {
+                "labeled_amounts": [{"id": "cand-1", "amount_ngn": "500.00", "context": "Fee"}],
+                "selected_candidate_id": "cand-1",
+            },
+            "user_confirmed": True,
+        },
+    )
+    assert no_ctx_res.status_code == 422
+
+    # PATCH validation: create a valid candidate-selected record then test update paths
+    valid_cand_res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_kobo": 50000,
+            "currency": "NGN",
+            "transaction_date": "26/11/2026",
+            "source_type": "notification",
+            "extracted_fields": {
+                "labeled_amounts": [{"id": "cand-1", "amount_ngn": "500.00", "context": "Fee"}],
+                "selected_candidate_id": "cand-1",
+                "selected_candidate_context": "Fee",
+            },
+            "user_confirmed": True,
+        },
+    )
+    assert valid_cand_res.status_code == 201
+    tx_id = valid_cand_res.json()["id"]
+
+    # PATCH with invalid calendar date is rejected
+    patch_bad_date = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={"transaction_date": "31/02/2026"},
+    )
+    assert patch_bad_date.status_code == 422
+
+    # PATCH with ambiguous date without re-confirmation is rejected when user_confirmed=True
+    patch_amb_date = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={"transaction_date": "03/04/2026"},
+    )
+    assert patch_amb_date.status_code == 422
+
+    # PATCH with mismatched candidate metadata is rejected
+    patch_bad_cand = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={
+            "amount_kobo": 99900,
+            "extracted_fields": {
+                "labeled_amounts": [{"id": "cand-1", "amount_ngn": "500.00", "context": "Fee"}],
+                "selected_candidate_id": "cand-1",
+                "selected_candidate_context": "Fee",
+            },
+        },
+    )
+    assert patch_bad_cand.status_code == 422
+
+    # PATCH updating amount_kobo manually clears stale candidate link and records manual mode
+    patch_manual_amt = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={"amount_kobo": 75000},
+    )
+    assert patch_manual_amt.status_code == 200
+    assert patch_manual_amt.json()["extracted_fields"]["selected_candidate_id"] is None
+    assert patch_manual_amt.json()["extracted_fields"]["amount_entry_mode"] == "manual"
+
 
 def test_transaction_crud_lifecycle() -> None:
     reg = client.post(
