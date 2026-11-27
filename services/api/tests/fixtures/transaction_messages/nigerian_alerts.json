@@ -558,5 +558,117 @@
       "multiple_amounts_detected": false,
       "ambiguous_status_detected": false
     }
+  },
+  {
+    "name": "iso_offset_plus_1400_valid",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00. Date: 2026-11-26T14:22:00+14:00. Ref: ISO-806. Successful.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Successful",
+      "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": "2026-11-26T14:22:00+14:00",
+      "reference": "ISO-806",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
+  },
+  {
+    "name": "iso_offset_plus_1430_rejected",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00. Date: 2026-11-26T14:22:00+14:30. Ref: ISO-807. Successful.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Successful",
+      "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
+      "reference": "ISO-807",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
+  },
+  {
+    "name": "iso_offset_plus_1500_rejected",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00. Date: 2026-11-26T14:22:00+15:00. Ref: ISO-808. Successful.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Successful",
+      "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
+      "reference": "ISO-808",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
+  },
+  {
+    "name": "iso_offset_plus_2359_rejected",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00. Date: 2026-11-26T14:22:00+23:59. Ref: ISO-809. Successful.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Successful",
+      "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
+      "reference": "ISO-809",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
+  },
+  {
+    "name": "iso_offset_plus_0160_rejected",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00. Date: 2026-11-26T14:22:00+01:60. Ref: ISO-810. Successful.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Successful",
+      "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
+      "reference": "ISO-810",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
+  },
+  {
+    "name": "malformed_timestamp_suffix_rejected",
+    "source_type": "notification",
+    "raw_text": "Debit NGN 5,000.00. Date: 2026-11-26T14:22:00XYZ. Ref: ISO-811. Successful.",
+    "expected": {
+      "amount_kobo": 500000,
+      "reported_status": "Successful",
+      "transaction_direction": "Debit",
+      "sender_label": null,
+      "recipient_label": null,
+      "transaction_date": null,
+      "reference": "ISO-811",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
+  },
+  {
+    "name": "party_names_with_multiple_outcome_keywords",
+    "source_type": "notification",
+    "raw_text": "Credit NGN 12,000.00. From: SUCCESS PENDING APPROVED LTD. To: REVERSED COMPLETED VENTURES. Ref: PTY-812. Successful.",
+    "expected": {
+      "amount_kobo": 1200000,
+      "reported_status": "Successful",
+      "transaction_direction": "Credit",
+      "sender_label": "SUCCESS PENDING APPROVED LTD",
+      "recipient_label": "REVERSED COMPLETED VENTURES",
+      "transaction_date": null,
+      "reference": "PTY-812",
+      "multiple_amounts_detected": false,
+      "ambiguous_status_detected": false
+    }
   }
 ]

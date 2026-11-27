@@ -51,7 +51,7 @@ const FROM_PATTERN =
 const TO_PATTERN =
   /(?:to|recipient|beneficiary)\s*[:-]?\s*(.+?)(?=\s*(?:\.\s+|\r|\n|\||;|\b(?:from|sender|ref|reference|date|amt|amount|status)\s*:|\b(?:failed\s+due\s+to|declined\s+due\s+to|due\s+to|was\s+(?:failed|declined|pending|reversed|successful)|transaction\s+(?:failed|declined|pending|reversed|successful))\b|$))/i;
 const DATE_PATTERN =
-  /(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?)?|\d{2}\/\d{2}\/\d{4}|\d{2}-\d{2}-\d{4})/;
+  /(?:^|[\s:(])(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?)?|\d{2}\/\d{2}\/\d{4}|\d{2}-\d{2}-\d{4})(?=\s|$|[.,;)])/;
 
 function cleanLabel(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -78,7 +78,7 @@ function validateDateToken(token: string | undefined): string | null {
     if (tMatch[5] !== undefined) {
       const tzHh = Number(tMatch[6]);
       const tzMm = Number(tMatch[7]);
-      if (tzHh > 23 || tzMm > 59) return null;
+      if (tzHh > 14 || tzMm > 59 || (tzHh === 14 && tzMm !== 0)) return null;
     }
   }
   let year: number;

@@ -20,7 +20,7 @@ _TO_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _DATE_PATTERN = re.compile(
-    r"(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?)?|\d{2}/\d{2}/\d{4}|\d{2}-\d{2}-\d{4})"
+    r"(?:(?<=^)|(?<=[\s:(]))(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?)?|\d{2}/\d{2}/\d{4}|\d{2}-\d{2}-\d{4})(?=\s|$|[.,;)])"
 )
 
 
@@ -51,7 +51,7 @@ def _validate_date_token(token: str | None) -> str | None:
             return None
         if t_match.group(5) is not None:
             tz_hh, tz_mm = int(t_match.group(6)), int(t_match.group(7))
-            if tz_hh > 23 or tz_mm > 59:
+            if tz_hh > 14 or tz_mm > 59 or (tz_hh == 14 and tz_mm != 0):
                 return None
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
         try:
