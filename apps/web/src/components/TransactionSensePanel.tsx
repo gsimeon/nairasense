@@ -29,6 +29,29 @@ function formatNairaFromKobo(kobo: number | null): string {
   return `₦${(kobo / 100).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function parseNairaStringToKobo(raw: string): number | null {
+  const cleaned = raw.replace(/,/g, "").trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(cleaned)) return null;
+  const [whole, frac = ""] = cleaned.split(".");
+  const kobo = Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+  return Number.isSafeInteger(kobo) ? kobo : null;
+}
+
+const OFFLINE_STATUS_RULES: Array<[RegExp, string]> = [
+  [/\breversed\b/i, "Reversed"],
+  [/\breversal\b/i, "Reversed"],
+  [/\bfailed\b/i, "Failed"],
+  [/\bdeclined\b/i, "Failed"],
+  [/\bpending\b/i, "Pending"],
+  [/\bcredit\b/i, "Credit"],
+  [/\bcredited\b/i, "Credit"],
+  [/\bdebit\b/i, "Debit"],
+  [/\bdebited\b/i, "Debit"],
+  [/\bsuccessful\b/i, "Successful"],
+  [/\bsuccess\b/i, "Successful"],
+  [/\bapproved\b/i, "Successful"],
+];
+
 function parseLocallyOffline(rawText: string, sourceType: SourceType) {
   const amtRegex = /(?:NGN|₦|N)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/gi;
   const candidates: string[] = [];
@@ -39,21 +62,38 @@ function parseLocallyOffline(rawText: string, sourceType: SourceType) {
       candidates.push(cleaned);
     }
   }
-  const amountKobo = candidates.length > 0 ? Math.round(Number(candidates[0]) * 100) : null;
-  const refMatch = rawText.match(/(?:ref(?:erence)?|txn\s*id|session\s*id)\s*[:#-]?\s*([A-Za-z0-9_-]{4,64})/i);
-  const statusMatch = rawText.match(/\b(credit|debit|successful|pending|failed|reversed)\b/i);
+  const amountKobo = candidates.length > 0 ? parseNairaStringToKobo(candidates[0]) : null;
+  const refMatch = rawText.match(
+    /(?:ref(?:erence)?|txn\s*id|session\s*id|trans(?:action)?\s*id)\s*[:#-]?\s*([A-Za-z0-9_-]{4,64})/i,
+  );
+  const matchedStatuses: string[] = [];
+  for (const [pattern, label] of OFFLINE_STATUS_RULES) {
+    if (pattern.test(rawText) && !matchedStatuses.includes(label)) {
+      matchedStatuses.push(label);
+    }
+  }
+  const outcomeStatuses = matchedStatuses.filter((s) =>
+    ["Reversed", "Failed", "Pending", "Successful"].includes(s),
+  );
+  const ambiguousStatus = outcomeStatuses.length > 1;
+  const reportedStatus = ambiguousStatus
+    ? "Ambiguous (Review Required)"
+    : matchedStatuses[0] ?? null;
+
   return {
-    amount_kobo: amountKobo !== null && Number.isFinite(amountKobo) ? amountKobo : null,
+    amount_kobo: amountKobo,
     sender_label: null,
     recipient_label: null,
     reference: refMatch?.[1] ?? null,
-    reported_status: statusMatch ? statusMatch[1] : null,
+    reported_status: reportedStatus,
     transaction_date: null,
     source_type: sourceType,
     extracted_fields: {
       parser: "offline-regex-v2",
       multiple_amounts_detected: candidates.length > 1,
       candidate_amounts_ngn: candidates,
+      ambiguous_status_detected: ambiguousStatus,
+      candidate_statuses: matchedStatuses,
     },
     disclaimer:
       "Extracted offline from text. This is not independent bank settlement verification.",

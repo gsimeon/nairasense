@@ -56,18 +56,22 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     // Add ₦500 as User A while online and wait for sync
     await page.getByRole("button", { name: "+ ₦500" }).click();
     await expect(page.locator(".total-amount")).toHaveText("₦500");
-    await expect(page.getByText("Synced", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Your record has synchronised", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Go offline, add ₦200 -> queued in sync_queue
     await context.setOffline(true);
     await page.getByRole("button", { name: "+ ₦200" }).click();
     await expect(page.locator(".total-amount")).toHaveText("₦700");
-    await expect(page.getByText("1 pending sync")).toBeVisible();
+    await expect(page.getByText("Waiting for internet connection", { exact: true })).toBeVisible();
 
     // Reconnect and verify queue flushes without duplication
     await context.setOffline(false);
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
-    await expect(page.getByText("Synced", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Your record has synchronised", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.locator(".total-amount")).toHaveText("₦700");
 
     // Sign out -> User A's records must clear immediately
@@ -100,20 +104,24 @@ test.describe("NairaSense Core & Reliability E2E", () => {
 
     // Add ₦500 online first
     await page.getByRole("button", { name: "+ ₦500" }).click();
-    await expect(page.getByText("Synced", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Your record has synchronised", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Go offline, add ₦100, then delete ₦500
     await context.setOffline(true);
     await page.getByRole("button", { name: "+ ₦100" }).click();
     await page.getByRole("button", { name: "Remove Note 1, 500 Naira" }).click();
     await expect(page.locator(".total-amount")).toHaveText("₦100");
-    await expect(page.getByText("2 pending sync")).toBeVisible();
+    await expect(page.getByText("Waiting for internet connection", { exact: true })).toBeVisible();
 
     // Reconnect and reload page -> pending ₦100 and deletion of ₦500 must both persist
     await context.setOffline(false);
     await page.reload();
     await expect(page.getByText(`Signed in: ${user}`)).toBeVisible();
-    await expect(page.getByText("Synced", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Your record has synchronised", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.locator(".total-amount")).toHaveText("₦100");
   });
 
@@ -185,5 +193,48 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     await expect(page.getByText(`Signed in: ${userB}`)).toBeVisible();
     await page.waitForTimeout(500);
     await expect(page.locator(".total-amount")).toHaveText("₦0");
+  });
+
+  test("Logout during in-flight deletion does not leak into next user", async ({ page }) => {
+    const suffix = Date.now();
+    const userA = `del_inflight_a_${suffix}`;
+    const userB = `del_inflight_b_${suffix}`;
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "Sign in / Sync" }).click();
+    await page.getByRole("button", { name: "Create account" }).first().click();
+    await page.getByLabel("Username").fill(userA);
+    await page.getByLabel("Password (8+ characters)").fill("password123");
+    await page.locator("form.auth-form button[type='submit']").click();
+    await expect(page.getByText(`Signed in: ${userA}`)).toBeVisible();
+
+    await page.getByRole("button", { name: "+ ₦500" }).click();
+    await expect(page.getByText("Your record has synchronised", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Delay DELETE so User A logs out while deletion is in flight
+    await page.route("**/api/v1/cash/entries/*", async (route) => {
+      if (route.request().method() === "DELETE") {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      await route.continue();
+    });
+
+    await page.getByRole("button", { name: "Remove Note 1, 500 Naira" }).click();
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.locator(".total-amount")).toHaveText("₦0");
+
+    // Sign in as User B and add ₦200; delayed delete must not affect User B
+    await page.getByRole("button", { name: "Sign in / Sync" }).click();
+    await page.getByRole("button", { name: "Create account" }).first().click();
+    await page.getByLabel("Username").fill(userB);
+    await page.getByLabel("Password (8+ characters)").fill("password123");
+    await page.locator("form.auth-form button[type='submit']").click();
+    await expect(page.getByText(`Signed in: ${userB}`)).toBeVisible();
+
+    await page.getByRole("button", { name: "+ ₦200" }).click();
+    await page.waitForTimeout(500);
+    await expect(page.locator(".total-amount")).toHaveText("₦200");
   });
 });

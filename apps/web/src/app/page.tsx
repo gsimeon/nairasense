@@ -620,12 +620,14 @@ export default function HomePage() {
   }
 
   const syncLabel = !authUserId
-    ? "Local-only mode"
+    ? "Saved on this device"
     : failedItems.length > 0
-      ? `${failedItems.length} sync failed`
+      ? "Could not synchronise; your local record is still available"
       : pendingSyncCount > 0
-        ? `${pendingSyncCount} pending sync`
-        : "Synced";
+        ? !isOnline
+          ? "Waiting for internet connection"
+          : `Saved on this device (${pendingSyncCount} waiting to sync)`
+        : "Your record has synchronised";
 
   return (
     <>

@@ -61,9 +61,9 @@ jobs:
         env:
           E2E_BASE_URL: http://localhost:3000
         run: |
-          cd services/api && uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          (cd services/api && uvicorn app.main:app --host 127.0.0.1 --port 8000) > api.log 2>&1 &
           API_PID=$!
-          cd apps/web && npm run start &
+          (cd apps/web && npm run start) > web.log 2>&1 &
           WEB_PID=$!
           trap "kill $API_PID $WEB_PID 2>/dev/null || true" EXIT
           for i in $(seq 1 30); do
@@ -75,7 +75,7 @@ jobs:
           curl -sf http://127.0.0.1:8000/health >/dev/null
           curl -sf http://localhost:3000 >/dev/null
           cd apps/web && npm run test:e2e
-      - name: Upload Playwright artifacts on failure
+      - name: Upload Playwright and server logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -83,4 +83,6 @@ jobs:
           path: |
             apps/web/playwright-report/
             apps/web/test-results/
+            api.log
+            web.log
           retention-days: 7

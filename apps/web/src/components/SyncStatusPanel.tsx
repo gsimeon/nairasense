@@ -22,12 +22,14 @@ export function SyncStatusPanel({
   onAnnounce,
 }: SyncStatusPanelProps) {
   const statusSummary = !isAuthenticated
-    ? "Local-only mode. Sign in to sync records across devices."
+    ? "Saved on this device. Sign in to synchronise records across devices."
     : failedItems.length > 0
-      ? `${failedItems.length} record(s) failed to sync and need retry.`
+      ? `Could not synchronise ${failedItems.length} record(s); your local record is still available.`
       : pendingCount > 0
-        ? `${pendingCount} record(s) saved locally and waiting to sync.`
-        : "All confirmed records are synced.";
+        ? !isOnline
+          ? `Waiting for internet connection (${pendingCount} record(s) saved on this device).`
+          : `${pendingCount} record(s) saved on this device and waiting to synchronise.`
+        : "Your record has synchronised.";
 
   return (
     <section className="panel" aria-labelledby="sync-status-title">
