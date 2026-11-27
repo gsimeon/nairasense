@@ -127,22 +127,61 @@ def test_ambiguous_date_and_amount_context_labels() -> None:
         json={"raw_text": "Available Balance: NGN 25,000.00.", "source_type": "notification"},
     )
     assert bal_only.status_code == 200
+    assert bal_only.json()["amount_kobo"] is None
     bal_fields = bal_only.json()["extracted_fields"]
     assert bal_fields["amount_requires_confirmation"] is True
-    assert bal_fields["labeled_amounts"] == [{"amount_ngn": "25000.00", "context": "Available Balance"}]
+    assert bal_fields["labeled_amounts"] == [
+        {"id": "cand-1", "amount_ngn": "25000.00", "context": "Available Balance"}
+    ]
 
     repeated = client.post(
         "/api/v1/transactions/extract",
         json={"raw_text": "Debit NGN 500.00. Fee: NGN 500.00.", "source_type": "notification"},
     )
     assert repeated.status_code == 200
+    assert repeated.json()["amount_kobo"] is None
     rep_fields = repeated.json()["extracted_fields"]
     assert rep_fields["multiple_amounts_detected"] is True
     assert rep_fields["amount_requires_confirmation"] is True
     assert rep_fields["labeled_amounts"] == [
-        {"amount_ngn": "500.00", "context": "Amount"},
-        {"amount_ngn": "500.00", "context": "Fee"},
+        {"id": "cand-1", "amount_ngn": "500.00", "context": "Amount"},
+        {"id": "cand-2", "amount_ngn": "500.00", "context": "Fee"},
     ]
+
+
+def test_ambiguous_date_requires_confirmation_on_create() -> None:
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"username": "amb_date_tester", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    bad_res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_kobo": 500000,
+            "currency": "NGN",
+            "transaction_date": "03/04/2026",
+            "source_type": "notification",
+            "extracted_fields": {"ambiguous_date_detected": True},
+            "user_confirmed": True,
+        },
+    )
+    assert bad_res.status_code == 422
+
+    ok_res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_kobo": 500000,
+            "currency": "NGN",
+            "transaction_date": "03/04/2026",
+            "source_type": "notification",
+            "extracted_fields": {"ambiguous_date_detected": True, "date_confirmed_by_user": True},
+            "user_confirmed": True,
+        },
+    )
+    assert ok_res.status_code == 201
 
 
 def test_transaction_crud_lifecycle() -> None:

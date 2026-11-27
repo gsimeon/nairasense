@@ -43,9 +43,11 @@ export function TransactionSensePanel({
 
   const [reviewing, setReviewing] = useState(false);
   const [amountNaira, setAmountNaira] = useState("");
-  const [labeledAmounts, setLabeledAmounts] = useState<Array<{ amount_ngn: string; context: string }>>(
-    [],
-  );
+  const [labeledAmounts, setLabeledAmounts] = useState<
+    Array<{ id: string; amount_ngn: string; context: string }>
+  >([]);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [selectedCandidateContext, setSelectedCandidateContext] = useState<string | null>(null);
   const [amountRequiresConfirmation, setAmountRequiresConfirmation] = useState(false);
   const [dateConfirmed, setDateConfirmed] = useState(true);
   const [rawExtractedFields, setRawExtractedFields] = useState<Record<string, unknown>>({});
@@ -69,14 +71,19 @@ export function TransactionSensePanel({
       }
       const fields = (extracted.extracted_fields ?? {}) as Record<string, unknown>;
       const rawLabeled = Array.isArray(fields.labeled_amounts)
-        ? (fields.labeled_amounts as Array<{ amount_ngn?: unknown; context?: unknown }>)
+        ? (fields.labeled_amounts as Array<{ id?: unknown; amount_ngn?: unknown; context?: unknown }>)
             .filter((item) => item && typeof item.amount_ngn === "string")
-            .map((item) => ({
+            .map((item, idx) => ({
+              id: typeof item.id === "string" ? item.id : `cand-${idx + 1}`,
               amount_ngn: String(item.amount_ngn),
               context: typeof item.context === "string" ? item.context : "Other",
             }))
         : Array.isArray(fields.candidate_amounts_ngn)
-          ? fields.candidate_amounts_ngn.map((c) => ({ amount_ngn: String(c), context: "Other" }))
+          ? fields.candidate_amounts_ngn.map((c, idx) => ({
+              id: `cand-${idx + 1}`,
+              amount_ngn: String(c),
+              context: "Other",
+            }))
           : [];
       const requireAmtConfirm =
         Boolean(fields.amount_requires_confirmation) ||
@@ -85,6 +92,12 @@ export function TransactionSensePanel({
       const ambDate = Boolean(fields.ambiguous_date_detected);
 
       setLabeledAmounts(rawLabeled);
+      setSelectedCandidateId(
+        !requireAmtConfirm && rawLabeled.length === 1 ? rawLabeled[0].id : null,
+      );
+      setSelectedCandidateContext(
+        !requireAmtConfirm && rawLabeled.length === 1 ? rawLabeled[0].context : null,
+      );
       setAmountRequiresConfirmation(requireAmtConfirm);
       setDateConfirmed(!ambDate);
       setRawExtractedFields(fields);
@@ -179,6 +192,8 @@ export function TransactionSensePanel({
       extracted_fields: {
         ...rawExtractedFields,
         transaction_direction: transactionDirection.trim() || null,
+        selected_candidate_id: selectedCandidateId,
+        selected_candidate_context: selectedCandidateContext,
         date_confirmed_by_user: dateConfirmed,
         reviewed_in_ui: true,
         suggested_amount_kobo: suggestedAmountKobo,
@@ -317,16 +332,18 @@ export function TransactionSensePanel({
                   leave it blank:
                 </p>
                 <div className="actions">
-                  {labeledAmounts.map((item, idx) => (
+                  {labeledAmounts.map((item) => (
                     <button
-                      key={`${item.amount_ngn}-${item.context}-${idx}`}
+                      key={item.id}
                       type="button"
-                      aria-pressed={amountNaira === item.amount_ngn}
+                      aria-pressed={selectedCandidateId === item.id}
                       className={
-                        amountNaira === item.amount_ngn ? "primary small-btn" : "secondary small-btn"
+                        selectedCandidateId === item.id ? "primary small-btn" : "secondary small-btn"
                       }
                       onClick={() => {
                         setAmountNaira(item.amount_ngn);
+                        setSelectedCandidateId(item.id);
+                        setSelectedCandidateContext(item.context);
                         onAnnounce(
                           `Selected ${Number(item.amount_ngn).toLocaleString("en-NG", { minimumFractionDigits: 2 })} Naira (${item.context}).`,
                           true,
@@ -339,10 +356,16 @@ export function TransactionSensePanel({
                   ))}
                   <button
                     type="button"
-                    aria-pressed={amountNaira === ""}
-                    className={amountNaira === "" ? "primary small-btn" : "secondary small-btn"}
+                    aria-pressed={amountNaira === "" && selectedCandidateId === null}
+                    className={
+                      amountNaira === "" && selectedCandidateId === null
+                        ? "primary small-btn"
+                        : "secondary small-btn"
+                    }
                     onClick={() => {
                       setAmountNaira("");
+                      setSelectedCandidateId(null);
+                      setSelectedCandidateContext(null);
                       onAnnounce("Amount left unknown.", true);
                     }}
                   >
@@ -359,7 +382,11 @@ export function TransactionSensePanel({
                 step="0.01"
                 min="0"
                 value={amountNaira}
-                onChange={(e) => setAmountNaira(e.target.value)}
+                onChange={(e) => {
+                  setAmountNaira(e.target.value);
+                  setSelectedCandidateId(null);
+                  setSelectedCandidateContext(null);
+                }}
               />
             </div>
             <div className="field">
@@ -423,7 +450,13 @@ export function TransactionSensePanel({
                 id="tx-date"
                 type="text"
                 value={txDate}
-                onChange={(e) => setTxDate(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setTxDate(next);
+                  if (Boolean(rawExtractedFields.ambiguous_date_detected)) {
+                    setDateConfirmed(next.trim() === "");
+                  }
+                }}
               />
             </div>
 

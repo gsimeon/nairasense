@@ -14,7 +14,7 @@ export interface OfflineExtractedTransaction {
     amount_requires_confirmation: boolean;
     candidate_amounts_ngn: string[];
     amount_contexts: Record<string, string>;
-    labeled_amounts: Array<{ amount_ngn: string; context: string }>;
+    labeled_amounts: Array<{ id: string; amount_ngn: string; context: string }>;
     transaction_direction: string | null;
     ambiguous_status_detected: boolean;
     ambiguous_date_detected: boolean;
@@ -120,7 +120,7 @@ function classifyAmountContext(rawText: string, startIdx: number): string {
   if (/\b(?:new\s+balance|current\s+balance|balance|bal)\b/.test(prefix)) return "Balance";
   if (/\b(?:fee|charge|vat|commission)\b/.test(prefix)) return "Fee";
   if (/\brefund\b/.test(prefix)) return "Refund";
-  if (/\b(?:amt|amount|debit|debited|credit|credited|transfer|purchase)\b/.test(prefix)) {
+  if (/\b(?:amt|amount|debit|debited|credit|credited|transfer|purchase|transaction)\b/.test(prefix)) {
     return "Amount";
   }
   return "Other";
@@ -133,12 +133,13 @@ export function parseLocallyOffline(
   const amtRegex = /(?:NGN|₦|N)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/gi;
   const candidates: string[] = [];
   const amountContexts: Record<string, string> = {};
-  const labeledAmounts: Array<{ amount_ngn: string; context: string }> = [];
+  const labeledAmounts: Array<{ id: string; amount_ngn: string; context: string }> = [];
   let match: RegExpExecArray | null;
+  let candIdx = 1;
   while ((match = amtRegex.exec(rawText)) !== null) {
     const cleaned = match[1].replace(/,/g, "");
     const ctxLabel = classifyAmountContext(rawText, match.index);
-    labeledAmounts.push({ amount_ngn: cleaned, context: ctxLabel });
+    labeledAmounts.push({ id: `cand-${candIdx++}`, amount_ngn: cleaned, context: ctxLabel });
     if (!candidates.includes(cleaned)) {
       candidates.push(cleaned);
     }
@@ -149,7 +150,10 @@ export function parseLocallyOffline(
   const amountRequiresConfirmation =
     labeledAmounts.length > 1 ||
     (labeledAmounts.length === 1 && labeledAmounts[0]?.context !== "Amount");
-  const amountKobo = candidates.length > 0 ? parseNairaStringToKobo(candidates[0]) : null;
+  const amountKobo =
+    !amountRequiresConfirmation && candidates.length > 0
+      ? parseNairaStringToKobo(candidates[0])
+      : null;
   const refMatch = rawText.match(
     /(?:ref(?:erence)?|txn\s*id|session\s*id|trans(?:action)?\s*id)\s*[:#-]?\s*([A-Za-z0-9_-]{4,64})/i,
   );

@@ -84,7 +84,7 @@ def _classify_amount_context(raw_text: str, start_idx: int) -> str:
         return "Fee"
     if re.search(r"\brefund\b", prefix):
         return "Refund"
-    if re.search(r"\b(?:amt|amount|debit|debited|credit|credited|transfer|purchase)\b", prefix):
+    if re.search(r"\b(?:amt|amount|debit|debited|credit|credited|transfer|purchase|transaction)\b", prefix):
         return "Amount"
     return "Other"
 
@@ -98,10 +98,10 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     candidate_amounts_ngn: list[str] = []
     amount_contexts: dict[str, str] = {}
     labeled_amounts: list[dict[str, str]] = []
-    for amt_match in _AMOUNT_PATTERN.finditer(raw_text):
+    for idx, amt_match in enumerate(_AMOUNT_PATTERN.finditer(raw_text), start=1):
         cleaned_num = amt_match.group(1).replace(",", "")
         ctx_label = _classify_amount_context(raw_text, amt_match.start())
-        labeled_amounts.append({"amount_ngn": cleaned_num, "context": ctx_label})
+        labeled_amounts.append({"id": f"cand-{idx}", "amount_ngn": cleaned_num, "context": ctx_label})
         if cleaned_num not in candidate_amounts_ngn:
             candidate_amounts_ngn.append(cleaned_num)
         if cleaned_num not in amount_contexts:
@@ -112,7 +112,7 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     )
 
     amount_match = _AMOUNT_PATTERN.search(raw_text)
-    if amount_match:
+    if amount_match and not amount_requires_confirmation:
         numeric_str = amount_match.group(1).replace(",", "")
         try:
             amount_kobo = int((Decimal(numeric_str) * 100).to_integral_value())

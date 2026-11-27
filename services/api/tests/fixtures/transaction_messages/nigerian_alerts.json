@@ -20,7 +20,7 @@
     "source_type": "notification",
     "raw_text": "Debit Alert: NGN 5,000.00. Fee: NGN 50.00. Avail Bal: NGN 25,000.00. Ref: GTB-441209. Date: 2026-11-26.",
     "expected": {
-      "amount_kobo": 500000,
+      "amount_kobo": null,
       "reported_status": null,
       "transaction_direction": "Debit",
       "sender_label": null,
@@ -68,7 +68,7 @@
     "source_type": "notification",
     "raw_text": "Reversal Alert: NGN 2,500.00 reversed. New Balance: NGN 18,450.50. Ref: REV-7710.",
     "expected": {
-      "amount_kobo": 250000,
+      "amount_kobo": null,
       "reported_status": "Reversed",
       "transaction_direction": null,
       "sender_label": null,
@@ -100,7 +100,7 @@
     "source_type": "notification",
     "raw_text": "SMS Alert Fee: Debit NGN 52.50. Avail Bal: NGN 14,200.00.",
     "expected": {
-      "amount_kobo": 5250,
+      "amount_kobo": null,
       "reported_status": null,
       "transaction_direction": "Debit",
       "sender_label": null,
@@ -116,7 +116,7 @@
     "source_type": "pasted_text",
     "raw_text": "Credit: ₦20,000.00 from BOLA. Current Balance: ₦45,000.00. Ref: NIP-55123.",
     "expected": {
-      "amount_kobo": 2000000,
+      "amount_kobo": null,
       "reported_status": null,
       "transaction_direction": "Credit",
       "sender_label": "BOLA",
@@ -212,7 +212,7 @@
     "source_type": "notification",
     "raw_text": "Debit NGN 3,000.00 successful; fee NGN 50.00 pending. Ref: MUL-902.",
     "expected": {
-      "amount_kobo": 300000,
+      "amount_kobo": null,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": "Debit",
       "sender_label": null,
@@ -260,7 +260,7 @@
     "source_type": "notification",
     "raw_text": "Reversal request pending for NGN 3,500.00. Ref: RVP-204.",
     "expected": {
-      "amount_kobo": 350000,
+      "amount_kobo": null,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": null,
       "sender_label": null,
@@ -308,7 +308,7 @@
     "source_type": "notification",
     "raw_text": "Reversal failed for NGN 2,500.00. Ref: RVF-602.",
     "expected": {
-      "amount_kobo": 250000,
+      "amount_kobo": null,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": null,
       "sender_label": null,
@@ -324,7 +324,7 @@
     "source_type": "notification",
     "raw_text": "Refund pending for NGN 1,200.00. Ref: RFP-603.",
     "expected": {
-      "amount_kobo": 120000,
+      "amount_kobo": null,
       "reported_status": "Pending",
       "transaction_direction": null,
       "sender_label": null,
@@ -340,7 +340,7 @@
     "source_type": "notification",
     "raw_text": "Refund completed for NGN 1,500.00. Ref: RFC-604.",
     "expected": {
-      "amount_kobo": 150000,
+      "amount_kobo": null,
       "reported_status": "Successful",
       "transaction_direction": null,
       "sender_label": null,
@@ -356,7 +356,7 @@
     "source_type": "notification",
     "raw_text": "Reversal not successful for NGN 2,000.00. Ref: RNS-605.",
     "expected": {
-      "amount_kobo": 200000,
+      "amount_kobo": null,
       "reported_status": "Ambiguous (Review Required)",
       "transaction_direction": null,
       "sender_label": null,
@@ -452,7 +452,7 @@
     "source_type": "notification",
     "raw_text": "Debit NGN 5,000.00. Fee: NGN 50.00. Avail Bal: NGN 25,000.00. Ref: GTB-441209. Session ID: SESS-9981.",
     "expected": {
-      "amount_kobo": 500000,
+      "amount_kobo": null,
       "reported_status": null,
       "transaction_direction": "Debit",
       "sender_label": null,

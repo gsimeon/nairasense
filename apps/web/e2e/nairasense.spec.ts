@@ -431,5 +431,18 @@ test.describe("NairaSense Core & Reliability E2E", () => {
 
     await page.getByRole("button", { name: "Confirm 03/04/2026 (day-first)" }).click();
     await expect(saveBtn).toBeEnabled();
+
+    // Editing ambiguous date resets confirmation state
+    await page.getByLabel("Date / time").fill("04/03/2026");
+    await expect(saveBtn).toBeDisabled();
+
+    // Repeated identical values have distinct selection identity
+    await page.getByLabel("Alert or receipt text").fill("Debit NGN 500.00. Fee: NGN 500.00.");
+    await page.getByRole("button", { name: "Extract fields for review" }).click();
+    const amtBtn = page.getByRole("button", { name: "₦500.00 (Amount)" });
+    const feeBtn = page.getByRole("button", { name: "₦500.00 (Fee)" });
+    await amtBtn.click();
+    await expect(amtBtn).toHaveAttribute("aria-pressed", "true");
+    await expect(feeBtn).toHaveAttribute("aria-pressed", "false");
   });
 });

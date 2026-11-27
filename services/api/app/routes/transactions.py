@@ -65,6 +65,16 @@ def create_transaction(
     current_user: Annotated[AuthUser, Depends(get_current_user)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> TransactionResponse:
+    if (
+        payload.user_confirmed
+        and payload.transaction_date is not None
+        and payload.extracted_fields.get("ambiguous_date_detected") is True
+        and payload.extracted_fields.get("date_confirmed_by_user") is not True
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Ambiguous transaction date must be explicitly confirmed or cleared before saving.",
+        )
     clean_key = idempotency_key.strip() if idempotency_key else None
     req_hash = (
         hashlib.sha256(
