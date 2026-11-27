@@ -64,7 +64,7 @@ function cleanLabel(raw: string | undefined): string | null {
   return cleaned || null;
 }
 
-function validateDateToken(token: string | undefined): string | null {
+export function validateDateToken(token: string | undefined): string | null {
   if (!token) return null;
   const match = token.match(/^([^\sT]+)(?:[T ](.+))?$/);
   if (!match) return null;

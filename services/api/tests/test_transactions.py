@@ -182,6 +182,48 @@ def test_ambiguous_date_requires_confirmation_on_create() -> None:
         },
     )
     assert ok_res.status_code == 201
+    assert ok_res.json()["extracted_fields"]["amount_entry_mode"] == "manual"
+
+    # Impossible calendar date rejected server-side
+    invalid_date_res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_kobo": 500000,
+            "currency": "NGN",
+            "transaction_date": "31/02/2026",
+            "source_type": "notification",
+            "user_confirmed": True,
+        },
+    )
+    assert invalid_date_res.status_code == 422
+
+    # Candidate ID/amount mismatch rejected server-side
+    mismatch_res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={
+            "amount_kobo": 500000,
+            "currency": "NGN",
+            "source_type": "notification",
+            "extracted_fields": {
+                "labeled_amounts": [{"id": "cand-1", "amount_ngn": "500.00", "context": "Fee"}],
+                "selected_candidate_id": "cand-1",
+                "selected_candidate_context": "Fee",
+            },
+            "user_confirmed": True,
+        },
+    )
+    assert mismatch_res.status_code == 422
+
+    # Unknown amount and unknown date remain valid
+    unknown_res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={"amount_kobo": None, "transaction_date": None, "source_type": "notification"},
+    )
+    assert unknown_res.status_code == 201
+    assert unknown_res.json()["extracted_fields"]["amount_entry_mode"] == "unknown"
 
 
 def test_transaction_crud_lifecycle() -> None:

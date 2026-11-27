@@ -1,6 +1,7 @@
 import hashlib
 import json
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Annotated
 from uuid import uuid4
 
@@ -15,7 +16,11 @@ from app.schemas.transactions import (
     TransactionResponse,
     TransactionUpdate,
 )
-from app.services.transaction_parser import extract_transaction_fields
+from app.services.transaction_parser import (
+    _is_ambiguous_date,
+    _validate_date_token,
+    extract_transaction_fields,
+)
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -65,16 +70,67 @@ def create_transaction(
     current_user: Annotated[AuthUser, Depends(get_current_user)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> TransactionResponse:
-    if (
-        payload.user_confirmed
-        and payload.transaction_date is not None
-        and payload.extracted_fields.get("ambiguous_date_detected") is True
-        and payload.extracted_fields.get("date_confirmed_by_user") is not True
-    ):
-        raise HTTPException(
-            status_code=422,
-            detail="Ambiguous transaction date must be explicitly confirmed or cleared before saving.",
+    if payload.transaction_date is not None and payload.transaction_date.strip():
+        clean_date = payload.transaction_date.strip()
+        if _validate_date_token(clean_date) is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid transaction_date; expected a valid calendar date.",
+            )
+        if (
+            payload.user_confirmed
+            and (
+                _is_ambiguous_date(clean_date)
+                or payload.extracted_fields.get("ambiguous_date_detected") is True
+            )
+            and payload.extracted_fields.get("date_confirmed_by_user") is not True
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Ambiguous transaction date must be explicitly confirmed or cleared before saving.",
+            )
+
+    selected_id = payload.extracted_fields.get("selected_candidate_id")
+    if selected_id is not None:
+        labeled = payload.extracted_fields.get("labeled_amounts")
+        if not isinstance(labeled, list):
+            raise HTTPException(
+                status_code=422,
+                detail="Selected amount candidate ID requires extracted labeled_amounts.",
+            )
+        matched = next(
+            (item for item in labeled if isinstance(item, dict) and item.get("id") == selected_id),
+            None,
         )
+        if matched is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Selected amount candidate ID was not found in extracted candidates.",
+            )
+        selected_ctx = payload.extracted_fields.get("selected_candidate_context")
+        if selected_ctx is not None and matched.get("context") != selected_ctx:
+            raise HTTPException(
+                status_code=422,
+                detail="Selected amount candidate context does not match extracted candidate.",
+            )
+        try:
+            expected_kobo = int((Decimal(str(matched.get("amount_ngn", ""))) * 100).to_integral_value())
+        except (InvalidOperation, ValueError) as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid amount in selected candidate.",
+            ) from exc
+        if payload.amount_kobo != expected_kobo:
+            raise HTTPException(
+                status_code=422,
+                detail="Saved amount does not match the selected candidate amount.",
+            )
+        payload.extracted_fields.setdefault("amount_entry_mode", "candidate_selected")
+    elif payload.amount_kobo is not None:
+        payload.extracted_fields.setdefault("amount_entry_mode", "manual")
+    else:
+        payload.extracted_fields.setdefault("amount_entry_mode", "unknown")
+
     clean_key = idempotency_key.strip() if idempotency_key else None
     req_hash = (
         hashlib.sha256(

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createWorker } from "tesseract.js";
 
 import { extractTransactionText } from "@/lib/api";
-import { parseLocallyOffline } from "@/lib/offlineParser";
+import { parseLocallyOffline, validateDateToken } from "@/lib/offlineParser";
 import { SourceType, TransactionRecord } from "@/lib/types";
 
 type TransactionSensePanelProps = {
@@ -52,6 +52,7 @@ export function TransactionSensePanel({
   const [dateConfirmed, setDateConfirmed] = useState(true);
   const [rawExtractedFields, setRawExtractedFields] = useState<Record<string, unknown>>({});
   const [suggestedAmountKobo, setSuggestedAmountKobo] = useState<number | null>(null);
+  const [extractedDateOriginal, setExtractedDateOriginal] = useState<string | null>(null);
   const [sender, setSender] = useState("");
   const [recipient, setRecipient] = useState("");
   const [reference, setReference] = useState("");
@@ -102,6 +103,7 @@ export function TransactionSensePanel({
       setDateConfirmed(!ambDate);
       setRawExtractedFields(fields);
       setSuggestedAmountKobo(extracted.amount_kobo);
+      setExtractedDateOriginal(extracted.transaction_date ?? null);
 
       // Do NOT silently pre-fill when multiple amounts or non-Amount contexts (Fee/Balance) are detected
       setAmountNaira(
@@ -194,6 +196,13 @@ export function TransactionSensePanel({
         transaction_direction: transactionDirection.trim() || null,
         selected_candidate_id: selectedCandidateId,
         selected_candidate_context: selectedCandidateContext,
+        amount_entry_mode:
+          selectedCandidateId !== null
+            ? "candidate_selected"
+            : amountKobo !== null
+              ? "manual"
+              : "unknown",
+        extracted_transaction_date: extractedDateOriginal,
         date_confirmed_by_user: dateConfirmed,
         reviewed_in_ui: true,
         suggested_amount_kobo: suggestedAmountKobo,
@@ -303,6 +312,10 @@ export function TransactionSensePanel({
                   onClick={() => {
                     const m = txDate.match(/^(\d{2})([/-])(\d{2})([/-]\d{4})$/);
                     const swapped = m ? `${m[3]}${m[2]}${m[1]}${m[4]}` : txDate;
+                    if (!validateDateToken(swapped)) {
+                      onAnnounce(`Swapped date ${swapped} is not a valid calendar date.`, true);
+                      return;
+                    }
                     setTxDate(swapped);
                     setDateConfirmed(true);
                     onAnnounce(`Swapped date to ${swapped}.`, true);
