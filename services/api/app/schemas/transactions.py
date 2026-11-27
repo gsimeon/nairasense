@@ -37,7 +37,7 @@ class TransactionCreate(BaseModel):
     reported_status: str | None = Field(default=None, max_length=120)
     source_type: SourceType = "pasted_text"
     extracted_fields: dict[str, Any] = Field(default_factory=dict)
-    user_confirmed: bool = True
+    user_confirmed: bool = False
 
 
 class TransactionUpdate(BaseModel):

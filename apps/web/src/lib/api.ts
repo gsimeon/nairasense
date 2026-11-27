@@ -214,11 +214,17 @@ export async function createTransactionInApi(
 export async function listTransactionsFromApi(): Promise<TransactionRecord[]> {
   const all: TransactionRecord[] = [];
   const limit = 50;
-  let offset = 0;
+  let cursorCreatedAt: string | null = null;
+  let cursorId: string | null = null;
 
   while (true) {
     const token = getStoredToken();
-    const response = await fetch(`${API_BASE}/transactions?limit=${limit}&offset=${offset}`, {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursorCreatedAt && cursorId) {
+      params.set("cursor_created_at", cursorCreatedAt);
+      params.set("cursor_id", cursorId);
+    }
+    const response = await fetch(`${API_BASE}/transactions?${params.toString()}`, {
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -233,7 +239,9 @@ export async function listTransactionsFromApi(): Promise<TransactionRecord[]> {
     if (hasMoreHeader === "false" || page.length < limit) {
       break;
     }
-    offset += page.length;
+    const last = page[page.length - 1];
+    cursorCreatedAt = last.created_at;
+    cursorId = last.id;
   }
 
   return all;

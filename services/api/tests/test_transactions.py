@@ -128,3 +128,40 @@ def test_transactions_pagination() -> None:
     assert p2.status_code == 200
     assert len(p2.json()) == 2
     assert p2.headers["x-has-more"] == "false"
+
+    # Keyset cursor pagination
+    last = p1.json()[-1]
+    cp2 = client.get(
+        f"/api/v1/transactions?limit=3&cursor_created_at={last['created_at']}&cursor_id={last['id']}",
+        headers=headers,
+    )
+    assert cp2.status_code == 200
+    assert len(cp2.json()) == 2
+    assert {t["id"] for t in p1.json()} | {t["id"] for t in cp2.json()} == {
+        t["id"] for t in p1.json()
+    } | {t["id"] for t in p2.json()}
+
+
+def test_transaction_user_confirmed_defaults_false() -> None:
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"username": "tx_confirm_default", "password": "password123"},
+    )
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    res = client.post(
+        "/api/v1/transactions",
+        headers=headers,
+        json={"amount_kobo": 150000, "currency": "NGN", "source_type": "pasted_text"},
+    )
+    assert res.status_code == 201
+    assert res.json()["user_confirmed"] is False
+
+    # Explicit confirmation via PATCH
+    tx_id = res.json()["id"]
+    patched = client.patch(
+        f"/api/v1/transactions/{tx_id}",
+        headers=headers,
+        json={"user_confirmed": True},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["user_confirmed"] is True

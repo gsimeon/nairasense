@@ -224,7 +224,7 @@ export function CashSensePanel({
   return (
     <div id="panel-cash" role="tabpanel" aria-labelledby="tab-cash">
       <section className="intro" aria-labelledby="cash-page-title">
-        <p className="eyebrow">CASH SENSE · 100% OFFLINE</p>
+        <p className="eyebrow">CASH SENSE · LOCAL BACKEND BASELINE</p>
         <h1 id="cash-page-title">Count Naira with more confidence.</h1>
         <p>
           Scan notes live with your camera or record denominations directly. Only entries you

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.db import check_db_ready
+from app.db import check_db_ready, init_db
 from app.routes.auth import router as auth_router
 from app.routes.cash import router as cash_router
 from app.routes.preferences import router as preferences_router
@@ -14,6 +14,7 @@ from app.settings import settings
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     settings.validate_security_config()
+    init_db()
     yield
 
 

@@ -130,6 +130,8 @@ def list_transactions(
     current_user: Annotated[AuthUser, Depends(get_current_user)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    cursor_created_at: Annotated[str | None, Query()] = None,
+    cursor_id: Annotated[str | None, Query()] = None,
 ) -> list[TransactionResponse]:
     with get_conn() as conn:
         total_row = conn.execute(
@@ -137,17 +139,31 @@ def list_transactions(
             (current_user.user_id,),
         ).fetchone()
         total = int(total_row["cnt"]) if total_row else 0
-        rows = conn.execute(
-            """
-            SELECT * FROM transaction_records
-            WHERE user_id = ?
-            ORDER BY created_at DESC, id DESC
-            LIMIT ? OFFSET ?
-            """,
-            (current_user.user_id, limit, offset),
-        ).fetchall()
+        if cursor_created_at and cursor_id:
+            rows = conn.execute(
+                """
+                SELECT * FROM transaction_records
+                WHERE user_id = ?
+                  AND (created_at < ? OR (created_at = ? AND id < ?))
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (current_user.user_id, cursor_created_at, cursor_created_at, cursor_id, limit),
+            ).fetchall()
+            has_more = len(rows) == limit
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM transaction_records
+                WHERE user_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (current_user.user_id, limit, offset),
+            ).fetchall()
+            has_more = (offset + len(rows)) < total
     response.headers["X-Total-Count"] = str(total)
-    response.headers["X-Has-More"] = "true" if (offset + len(rows)) < total else "false"
+    response.headers["X-Has-More"] = "true" if has_more else "false"
     return [_row_to_response(row) for row in rows]
 
 

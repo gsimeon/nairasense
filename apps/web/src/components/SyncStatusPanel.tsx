@@ -79,9 +79,32 @@ export function SyncStatusPanel({
       {isAuthenticated && failedItems.length > 0 && (
         <div className="prototype-warning" role="alert">
           <p>
-            Some records could not be synced after multiple attempts. Your data is still safely
-            stored on this device.
+            {failedItems.length} record(s) could not be synced after multiple attempts. Your data is
+            still safely stored on this device.
           </p>
+          <ul className="entry-list" aria-label="Failed sync records">
+            {failedItems.map((item) => {
+              const label =
+                item.kind === "cash_entry"
+                  ? "Cash entry"
+                  : item.kind === "transaction"
+                    ? "Transaction record"
+                    : item.kind === "delete_cash_entry"
+                      ? "Remove cash entry"
+                      : item.kind === "delete_transaction"
+                        ? "Remove transaction"
+                        : "Clear cash session";
+              return (
+                <li key={item.id} className="entry-item">
+                  <span>
+                    <strong>{label}</strong> · queued{" "}
+                    {new Date(item.created_at).toLocaleTimeString()}
+                  </span>
+                  <span className="hint">Saved locally; waiting for retry</span>
+                </li>
+              );
+            })}
+          </ul>
           <button type="button" className="primary small-btn" onClick={() => void onRetryFailed()}>
             Retry failed records
           </button>

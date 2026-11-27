@@ -110,7 +110,7 @@ export function LiveCameraScanner({ busy, paused, onCapture, onAnnounce }: LiveC
       });
       streamRef.current = stream;
       setCameraActive(true);
-      onAnnounce("Live camera started. Place one Naira note in view and press Scan note now.", true);
+      onAnnounce("Camera ready. Place one Naira note in front of the camera and press Scan note now.", true);
     } catch {
       const msg = "Camera permission was denied or no camera was found. You can still upload a photo below.";
       setCameraError(msg);

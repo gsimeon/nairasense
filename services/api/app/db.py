@@ -89,16 +89,16 @@ def _connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Initialize local SQLite tables matching the PostgreSQL schema."""
+    """Initialize local SQLite tables once at startup (or test setup)."""
     with _connect() as conn:
         conn.executescript(_SCHEMA_SQL)
+        conn.commit()
 
 
 @contextmanager
 def get_conn() -> Iterator[sqlite3.Connection]:
     conn = _connect()
     try:
-        conn.executescript(_SCHEMA_SQL)
         yield conn
         conn.commit()
     finally:
