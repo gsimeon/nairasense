@@ -122,6 +122,28 @@ def test_ambiguous_date_and_amount_context_labels() -> None:
         "25000.00": "Available Balance",
     }
 
+    bal_only = client.post(
+        "/api/v1/transactions/extract",
+        json={"raw_text": "Available Balance: NGN 25,000.00.", "source_type": "notification"},
+    )
+    assert bal_only.status_code == 200
+    bal_fields = bal_only.json()["extracted_fields"]
+    assert bal_fields["amount_requires_confirmation"] is True
+    assert bal_fields["labeled_amounts"] == [{"amount_ngn": "25000.00", "context": "Available Balance"}]
+
+    repeated = client.post(
+        "/api/v1/transactions/extract",
+        json={"raw_text": "Debit NGN 500.00. Fee: NGN 500.00.", "source_type": "notification"},
+    )
+    assert repeated.status_code == 200
+    rep_fields = repeated.json()["extracted_fields"]
+    assert rep_fields["multiple_amounts_detected"] is True
+    assert rep_fields["amount_requires_confirmation"] is True
+    assert rep_fields["labeled_amounts"] == [
+        {"amount_ngn": "500.00", "context": "Amount"},
+        {"amount_ngn": "500.00", "context": "Fee"},
+    ]
+
 
 def test_transaction_crud_lifecycle() -> None:
     reg = client.post(

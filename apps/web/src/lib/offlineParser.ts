@@ -11,8 +11,10 @@ export interface OfflineExtractedTransaction {
   extracted_fields: {
     parser: string;
     multiple_amounts_detected: boolean;
+    amount_requires_confirmation: boolean;
     candidate_amounts_ngn: string[];
     amount_contexts: Record<string, string>;
+    labeled_amounts: Array<{ amount_ngn: string; context: string }>;
     transaction_direction: string | null;
     ambiguous_status_detected: boolean;
     ambiguous_date_detected: boolean;
@@ -131,16 +133,22 @@ export function parseLocallyOffline(
   const amtRegex = /(?:NGN|₦|N)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/gi;
   const candidates: string[] = [];
   const amountContexts: Record<string, string> = {};
+  const labeledAmounts: Array<{ amount_ngn: string; context: string }> = [];
   let match: RegExpExecArray | null;
   while ((match = amtRegex.exec(rawText)) !== null) {
     const cleaned = match[1].replace(/,/g, "");
+    const ctxLabel = classifyAmountContext(rawText, match.index);
+    labeledAmounts.push({ amount_ngn: cleaned, context: ctxLabel });
     if (!candidates.includes(cleaned)) {
       candidates.push(cleaned);
     }
     if (!(cleaned in amountContexts)) {
-      amountContexts[cleaned] = classifyAmountContext(rawText, match.index);
+      amountContexts[cleaned] = ctxLabel;
     }
   }
+  const amountRequiresConfirmation =
+    labeledAmounts.length > 1 ||
+    (labeledAmounts.length === 1 && labeledAmounts[0]?.context !== "Amount");
   const amountKobo = candidates.length > 0 ? parseNairaStringToKobo(candidates[0]) : null;
   const refMatch = rawText.match(
     /(?:ref(?:erence)?|txn\s*id|session\s*id|trans(?:action)?\s*id)\s*[:#-]?\s*([A-Za-z0-9_-]{4,64})/i,
@@ -194,9 +202,11 @@ export function parseLocallyOffline(
     source_type: sourceType,
     extracted_fields: {
       parser: "offline-regex-v2",
-      multiple_amounts_detected: candidates.length > 1,
+      multiple_amounts_detected: labeledAmounts.length > 1,
+      amount_requires_confirmation: amountRequiresConfirmation,
       candidate_amounts_ngn: candidates,
       amount_contexts: amountContexts,
+      labeled_amounts: labeledAmounts,
       transaction_direction: transactionDirection,
       ambiguous_status_detected: ambiguousStatus,
       ambiguous_date_detected: isAmbiguousDate(transactionDate),

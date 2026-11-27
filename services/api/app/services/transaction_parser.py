@@ -97,12 +97,19 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
     amount_kobo: int | None = None
     candidate_amounts_ngn: list[str] = []
     amount_contexts: dict[str, str] = {}
+    labeled_amounts: list[dict[str, str]] = []
     for amt_match in _AMOUNT_PATTERN.finditer(raw_text):
         cleaned_num = amt_match.group(1).replace(",", "")
+        ctx_label = _classify_amount_context(raw_text, amt_match.start())
+        labeled_amounts.append({"amount_ngn": cleaned_num, "context": ctx_label})
         if cleaned_num not in candidate_amounts_ngn:
             candidate_amounts_ngn.append(cleaned_num)
         if cleaned_num not in amount_contexts:
-            amount_contexts[cleaned_num] = _classify_amount_context(raw_text, amt_match.start())
+            amount_contexts[cleaned_num] = ctx_label
+
+    amount_requires_confirmation = len(labeled_amounts) > 1 or (
+        len(labeled_amounts) == 1 and labeled_amounts[0]["context"] != "Amount"
+    )
 
     amount_match = _AMOUNT_PATTERN.search(raw_text)
     if amount_match:
@@ -183,9 +190,11 @@ def extract_transaction_fields(raw_text: str) -> dict[str, Any]:
         "extracted_fields": {
             "parser": "deterministic-regex-v2",
             "matched_amount_token": amount_match.group(0) if amount_match else None,
-            "multiple_amounts_detected": len(candidate_amounts_ngn) > 1,
+            "multiple_amounts_detected": len(labeled_amounts) > 1,
+            "amount_requires_confirmation": amount_requires_confirmation,
             "candidate_amounts_ngn": candidate_amounts_ngn,
             "amount_contexts": amount_contexts,
+            "labeled_amounts": labeled_amounts,
             "transaction_direction": transaction_direction,
             "ambiguous_status_detected": ambiguous_status,
             "ambiguous_date_detected": _is_ambiguous_date(transaction_date),

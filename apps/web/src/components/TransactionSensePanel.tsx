@@ -43,8 +43,11 @@ export function TransactionSensePanel({
 
   const [reviewing, setReviewing] = useState(false);
   const [amountNaira, setAmountNaira] = useState("");
-  const [candidateAmounts, setCandidateAmounts] = useState<string[]>([]);
-  const [multipleAmountsDetected, setMultipleAmountsDetected] = useState(false);
+  const [labeledAmounts, setLabeledAmounts] = useState<Array<{ amount_ngn: string; context: string }>>(
+    [],
+  );
+  const [amountRequiresConfirmation, setAmountRequiresConfirmation] = useState(false);
+  const [dateConfirmed, setDateConfirmed] = useState(true);
   const [rawExtractedFields, setRawExtractedFields] = useState<Record<string, unknown>>({});
   const [suggestedAmountKobo, setSuggestedAmountKobo] = useState<number | null>(null);
   const [sender, setSender] = useState("");
@@ -65,19 +68,31 @@ export function TransactionSensePanel({
         extracted = parseLocallyOffline(textToParse, type);
       }
       const fields = (extracted.extracted_fields ?? {}) as Record<string, unknown>;
-      const candidates = Array.isArray(fields.candidate_amounts_ngn)
-        ? fields.candidate_amounts_ngn.map(String)
-        : [];
-      const multiAmt = Boolean(fields.multiple_amounts_detected) && candidates.length > 1;
+      const rawLabeled = Array.isArray(fields.labeled_amounts)
+        ? (fields.labeled_amounts as Array<{ amount_ngn?: unknown; context?: unknown }>)
+            .filter((item) => item && typeof item.amount_ngn === "string")
+            .map((item) => ({
+              amount_ngn: String(item.amount_ngn),
+              context: typeof item.context === "string" ? item.context : "Other",
+            }))
+        : Array.isArray(fields.candidate_amounts_ngn)
+          ? fields.candidate_amounts_ngn.map((c) => ({ amount_ngn: String(c), context: "Other" }))
+          : [];
+      const requireAmtConfirm =
+        Boolean(fields.amount_requires_confirmation) ||
+        Boolean(fields.multiple_amounts_detected) ||
+        rawLabeled.length > 1;
+      const ambDate = Boolean(fields.ambiguous_date_detected);
 
-      setCandidateAmounts(candidates);
-      setMultipleAmountsDetected(multiAmt);
+      setLabeledAmounts(rawLabeled);
+      setAmountRequiresConfirmation(requireAmtConfirm);
+      setDateConfirmed(!ambDate);
       setRawExtractedFields(fields);
       setSuggestedAmountKobo(extracted.amount_kobo);
 
-      // Do NOT silently pre-fill when multiple amounts are detected
+      // Do NOT silently pre-fill when multiple amounts or non-Amount contexts (Fee/Balance) are detected
       setAmountNaira(
-        !multiAmt && extracted.amount_kobo !== null
+        !requireAmtConfirm && extracted.amount_kobo !== null
           ? (extracted.amount_kobo / 100).toFixed(2)
           : "",
       );
@@ -91,8 +106,8 @@ export function TransactionSensePanel({
       setTxDate(extracted.transaction_date ?? "");
       setDisclaimer(extracted.disclaimer);
       setReviewing(true);
-      const spokenAmt = multiAmt
-        ? "multiple amounts found; please select the transaction amount"
+      const spokenAmt = requireAmtConfirm
+        ? "please review and select the transaction amount"
         : extracted.amount_kobo !== null
           ? `${(extracted.amount_kobo / 100).toLocaleString("en-NG")} Naira`
           : "unknown amount";
@@ -142,6 +157,10 @@ export function TransactionSensePanel({
 
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();
+    if (!dateConfirmed) {
+      onAnnounce("Please confirm the ambiguous date or leave it unknown before saving.", true);
+      return;
+    }
     const parsedNaira = Number(amountNaira);
     const amountKobo =
       amountNaira.trim() !== "" && Number.isFinite(parsedNaira) && parsedNaira >= 0
@@ -160,6 +179,7 @@ export function TransactionSensePanel({
       extracted_fields: {
         ...rawExtractedFields,
         transaction_direction: transactionDirection.trim() || null,
+        date_confirmed_by_user: dateConfirmed,
         reviewed_in_ui: true,
         suggested_amount_kobo: suggestedAmountKobo,
         confirmed_amount_kobo: amountKobo,
@@ -245,46 +265,78 @@ export function TransactionSensePanel({
               outcome before saving.
             </p>
           )}
-          {Boolean(rawExtractedFields.ambiguous_date_detected) && (
-            <p className="prototype-warning" role="alert">
-              The extracted date format (day/month vs month/day) may be ambiguous. Please verify
-              the date before saving.
-            </p>
+          {Boolean(rawExtractedFields.ambiguous_date_detected) && !dateConfirmed && (
+            <div className="prototype-warning" role="alert">
+              <p>
+                The extracted date format (day/month vs month/day) may be ambiguous. Confirm the
+                date interpretation or leave it unknown before saving:
+              </p>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="secondary small-btn"
+                  onClick={() => {
+                    setDateConfirmed(true);
+                    onAnnounce(`Confirmed date as ${txDate} (day-first).`, true);
+                  }}
+                >
+                  Confirm {txDate} (day-first)
+                </button>
+                <button
+                  type="button"
+                  className="secondary small-btn"
+                  onClick={() => {
+                    const m = txDate.match(/^(\d{2})([/-])(\d{2})([/-]\d{4})$/);
+                    const swapped = m ? `${m[3]}${m[2]}${m[1]}${m[4]}` : txDate;
+                    setTxDate(swapped);
+                    setDateConfirmed(true);
+                    onAnnounce(`Swapped date to ${swapped}.`, true);
+                  }}
+                >
+                  Swap day/month
+                </button>
+                <button
+                  type="button"
+                  className="secondary small-btn"
+                  onClick={() => {
+                    setTxDate("");
+                    setDateConfirmed(true);
+                    onAnnounce("Date left unknown.", true);
+                  }}
+                >
+                  Leave date unknown
+                </button>
+              </div>
+            </div>
           )}
           <form onSubmit={handleSave} className="review-form">
-            {multipleAmountsDetected && (
+            {amountRequiresConfirmation && labeledAmounts.length > 0 && (
               <div className="prototype-warning" role="group" aria-label="Choose transaction amount">
                 <p>
-                  Multiple amounts were detected in this message. Select which one is the
-                  transaction amount, enter it manually, or leave it blank:
+                  Confirm which detected value is the transaction amount, enter it manually, or
+                  leave it blank:
                 </p>
                 <div className="actions">
-                  {candidateAmounts.map((cand) => {
-                    const ctxMap =
-                      typeof rawExtractedFields.amount_contexts === "object" &&
-                      rawExtractedFields.amount_contexts !== null
-                        ? (rawExtractedFields.amount_contexts as Record<string, string>)
-                        : null;
-                    const ctxLabel = ctxMap?.[cand];
-                    return (
-                      <button
-                        key={cand}
-                        type="button"
-                        aria-pressed={amountNaira === cand}
-                        className={amountNaira === cand ? "primary small-btn" : "secondary small-btn"}
-                        onClick={() => {
-                          setAmountNaira(cand);
-                          onAnnounce(
-                            `Selected ${Number(cand).toLocaleString("en-NG", { minimumFractionDigits: 2 })} Naira${ctxLabel ? ` (${ctxLabel})` : ""}.`,
-                            true,
-                          );
-                        }}
-                      >
-                        ₦{Number(cand).toLocaleString("en-NG", { minimumFractionDigits: 2 })}
-                        {ctxLabel ? ` (${ctxLabel})` : ""}
-                      </button>
-                    );
-                  })}
+                  {labeledAmounts.map((item, idx) => (
+                    <button
+                      key={`${item.amount_ngn}-${item.context}-${idx}`}
+                      type="button"
+                      aria-pressed={amountNaira === item.amount_ngn}
+                      className={
+                        amountNaira === item.amount_ngn ? "primary small-btn" : "secondary small-btn"
+                      }
+                      onClick={() => {
+                        setAmountNaira(item.amount_ngn);
+                        onAnnounce(
+                          `Selected ${Number(item.amount_ngn).toLocaleString("en-NG", { minimumFractionDigits: 2 })} Naira (${item.context}).`,
+                          true,
+                        );
+                      }}
+                    >
+                      ₦{Number(item.amount_ngn).toLocaleString("en-NG", { minimumFractionDigits: 2 })}{" "}
+                      ({item.context})
+                    </button>
+                  ))}
                   <button
                     type="button"
                     aria-pressed={amountNaira === ""}
@@ -376,7 +428,7 @@ export function TransactionSensePanel({
             </div>
 
             <div className="actions">
-              <button type="submit" className="primary">
+              <button type="submit" className="primary" disabled={!dateConfirmed}>
                 Confirm &amp; save record
               </button>
               <button type="button" className="secondary" onClick={() => setReviewing(false)}>

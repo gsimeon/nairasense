@@ -389,6 +389,13 @@ test.describe("NairaSense Core & Reliability E2E", () => {
       expect(offline.extracted_fields.amount_contexts, `${fx.name} parity amount contexts`).toEqual(
         online.extracted_fields.amount_contexts,
       );
+      expect(
+        offline.extracted_fields.amount_requires_confirmation,
+        `${fx.name} parity amount_requires_confirmation`,
+      ).toBe(online.extracted_fields.amount_requires_confirmation);
+      expect(offline.extracted_fields.labeled_amounts, `${fx.name} parity labeled_amounts`).toEqual(
+        online.extracted_fields.labeled_amounts,
+      );
       expect(offline.extracted_fields.candidate_statuses, `${fx.name} parity candidate statuses`).toEqual(
         online.extracted_fields.candidate_statuses,
       );
@@ -404,5 +411,25 @@ test.describe("NairaSense Core & Reliability E2E", () => {
     await expect(page.locator("#panel-transactions p[role='alert']")).toContainText(
       "Conflicting outcome words were detected",
     );
+  });
+
+  test("Balance-only amount is not prefilled and ambiguous date requires explicit confirmation", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("tab", { name: "TransactionSense" }).click();
+    await page
+      .getByLabel("Alert or receipt text")
+      .fill("Available Balance: NGN 25,000.00. Date: 03/04/2026. Successful.");
+    await page.getByRole("button", { name: "Extract fields for review" }).click();
+
+    await expect(page.getByLabel("Amount (NGN)")).toHaveValue("");
+    await expect(page.getByRole("button", { name: "₦25,000.00 (Available Balance)" })).toBeVisible();
+
+    const saveBtn = page.getByRole("button", { name: "Confirm & save record" });
+    await expect(saveBtn).toBeDisabled();
+
+    await page.getByRole("button", { name: "Confirm 03/04/2026 (day-first)" }).click();
+    await expect(saveBtn).toBeEnabled();
   });
 });
